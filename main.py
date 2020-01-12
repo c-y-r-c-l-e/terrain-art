@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LightSource
 from keras.preprocessing.image import img_to_array    # TODO: loading Keras/TF just for this function is overkill
 import svgwrite
+import re
 
 alpha_elevation_mapping = [-11000, -10000, -9000, -8000, -7000, -6000, -5000, -4000, -3000, -2000, -1000,
                            -100, -50, -20, -10, -1, 0, 20, 40, 60, 80, 100, 120, 140, 160, 180, 200, 220,
@@ -123,13 +124,13 @@ def transform_log(tensor):
 
 def draw_and_save_svg_lines(tensor, name):
     # Artistic configurations
-    spacing = 2.5
-    intensity = 2
-    jitter = 1
+    spacing = 3
+    intensity = 5.5
+    jitter = 0
     logtransform = False
     # strokecolour = 'rgb(233,116,81)'
-    strokewidth = 1
-    strokeopacity = 0.8
+    strokewidth = 3.142
+    strokeopacity = 0.4
 
     # Automatic configs
     out_filepath = 'output/' + name + '.svg'
@@ -157,23 +158,34 @@ def draw_and_save_svg_lines(tensor, name):
         tensor = (tensor - 128)
     tensor = tensor * intensity
 
-    # tensor = (jitter * np.random.normal(size=(height, width, depth))) + tensor
-
-
+    elevation_scaled = (tensor[:,:,3] - np.min(tensor[:,:,3])) * (255 / (np.max(tensor[:,:,3]) - np.min(tensor[:,:,3])))
 
     # Draw the lines
     for Y in range(height):
         for X in range(width):
-            elevation_scaled = (tensor[X,Y,3] - np.min(tensor[:,:,3])) * (255 / (np.max(tensor[:,:,3]) - np.min(tensor[:,:,3])))  # TODO: move this out of the for-loop
-            elevation_scaled = str(256 - int(round(elevation_scaled)))
             normallines.add(d.line(start=(X * spacing + (jitter * np.random.normal()),
                                           Y * spacing + (jitter * np.random.normal())),
-                                   end=(X * spacing + tensor[X,Y,1],
-                                        Y * spacing + tensor[X,Y,0]),
-                                   stroke='rgb(' + elevation_scaled + ',116,81)'))
+                                   end=(X * spacing + (jitter * np.random.normal()) + tensor[X,Y,1],
+                                        Y * spacing + (jitter * np.random.normal()) + tensor[X,Y,0]),
+                                   stroke='rgb(' + str(256 - int(round(elevation_scaled[X,Y]))) + ',130,190)'))
 
     # Save the file
+    print("Saving to " + out_filepath + " ...")
     d.save()
+    print("Saved.")
+
+
+def auto_name_increment(dir="."):
+    dirfiles = os.listdir(path=dir)
+    numbered_dirfiles = [re.split(pattern='\.', string=f)[0] for f in dirfiles if
+                         re.search(pattern=r'\d\d\d\d\d\.(png|svg)', string=f)]
+    if not numbered_dirfiles:
+        max_filenumber = 0
+    else:
+        max_filenumber = max([int(x) for x in numbered_dirfiles]) + 1
+    max_filenumber = '{:05d}'.format(max_filenumber)
+    return max_filenumber
+
 
 
 if __name__ == '__main__':
@@ -194,4 +206,4 @@ if __name__ == '__main__':
     # save_img(normal, "00007")
 
     draw_and_save_svg_lines(tensor=normal[:,:,:],
-                            name="00053")
+                            name=auto_name_increment("./output"))
