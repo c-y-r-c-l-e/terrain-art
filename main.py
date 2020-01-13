@@ -1,15 +1,18 @@
 import imageio
-import cv2
+# import cv2
 import os
 import numpy as np
 import math
 import pylab as pl
 import matplotlib.pyplot as plt
-from matplotlib.colors import LightSource
+# from matplotlib.colors import LightSource
+from skimage import transform
 from matplotlib import collections as mc
 from keras.preprocessing.image import img_to_array    # TODO: loading Keras/TF just for this function is overkill
 import svgwrite
 import re
+from datetime import datetime
+from shutil import copy2
 
 alpha_elevation_mapping = [-11000, -10000, -9000, -8000, -7000, -6000, -5000, -4000, -3000, -2000, -1000,
                            -100, -50, -20, -10, -1, 0, 20, 40, 60, 80, 100, 120, 140, 160, 180, 200, 220,
@@ -63,9 +66,10 @@ def display_image_in_actual_size(tensor):
 
 
 def open_img(location, imagePath):
-  image = imageio.imread(os.path.join(location, imagePath)).astype(np.float)
-  image = img_to_array(image)
-  return image
+    print("Opening source img   " + location + "/" + imagePath + " ...")
+    image = imageio.imread(os.path.join(location, imagePath)).astype(np.float)
+    image = img_to_array(image)
+    return image
 
 
 def save_img(img_tensor, name):
@@ -76,14 +80,14 @@ def save_img(img_tensor, name):
     print("Saving file...")
     plt.savefig(out_filepath)
     plt.close()
-    print('Saved img to    ' + str(out_filepath))
+    print('Saved img to   ' + str(out_filepath))
 
 
 def save_img2(name):
     out_filepath = 'output/' + name + '.png'
     if not os.path.exists('output'):
         os.makedirs('output')
-    print("Saving to " + out_filepath + " ...")
+    print("Saving img to   " + out_filepath + " ...")
     plt.savefig(out_filepath)
     plt.close()
     print("Saved.")
@@ -180,10 +184,16 @@ def draw_and_save_svg_lines(tensor, name):
 def draw_png_lines(tensor):
     # Artistic configurations
     magnification = 8
-    kronscale = 4  # every (source-)pixel becomes a block of $kronscale by $kronscale pixels
-    spacing = 3
-    intensity = 55  # 5.5
-    jitter = 0
+    spacing = 3           # Spacing between plotted lines
+
+    apply_blurscaling = True     # Same as kronscaling, but with gaussian blur. If True, set intensity to something big
+    blurscale = 4.5
+
+    apply_kronscaling = False    # Every (source-)pixel becomes a block of $kronscale by $kronscale pixels
+    kronscale = 4
+
+    intensity = 55  # 5.5     #  ≈ Length of the lines
+    jitter = 0                #  Apply some randomness to all coordinates
     logtransform = False
     backgroundcolour = 'black'
     # strokecolour = 'darkgreen'
@@ -191,7 +201,12 @@ def draw_png_lines(tensor):
     strokeopacity = 0.2
 
     # Automatic configs
-    tensor = np.kron(tensor, np.ones((kronscale, kronscale, 1)))  # Apply kronscale before determining imgsize etc
+    if apply_blurscaling:
+        tensor = transform.pyramid_expand(image=tensor,
+                                          upscale=blurscale,
+                                          multichannel=True)
+    if apply_kronscaling:
+        tensor = np.kron(tensor, np.ones((kronscale, kronscale, 1)))  # Apply kronscale before determining imgsize etc
     height, width, depth = np.shape(tensor)
     dpi = plt.rcParams['figure.dpi']
     plt.rcParams['figure.facecolor'] = backgroundcolour
@@ -249,8 +264,23 @@ def auto_name_increment(dir="."):
     return max_filenumber
 
 
+def save_source(name):
+    """This just copies the python script (the one you are reading now) so I know which settings I used to generate a
+    particular img.
+
+    example123.png  will correspond to  example123.txt"""
+    out_filepath = 'output/' + name + '.txt'
+    if not os.path.exists('output'):
+        os.makedirs('output')
+    print("Saving txt to   " + out_filepath + " ...")
+    copy2(src="main.py",
+          dst=out_filepath)
+    print("Saved.")
+
+
 
 if __name__ == '__main__':
+    startTime = datetime.now()
     # normal = open_img(".", "5-8-7.png")
     # normal = open_img(".", "5-16-10.png")
     normal = open_img(".", "7-65-42.png")
@@ -271,7 +301,11 @@ if __name__ == '__main__':
     #                         name=auto_name_increment("./output"))
 
     draw_png_lines(tensor=normal[:,:,:])
-    save_img2(name=auto_name_increment("./output"))
 
-    # TODO: gaussian blur scale
+    filename = auto_name_increment("./output")
+    save_img2(name=filename)
+    save_source(name=filename)
+
+    print("This took " + str(datetime.now() - startTime))
+
     # TODO: generate bulk imgs for stopmotion
