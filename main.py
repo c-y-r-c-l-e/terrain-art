@@ -3,8 +3,10 @@ import cv2
 import os
 import numpy as np
 import math
+import pylab as pl
 import matplotlib.pyplot as plt
 from matplotlib.colors import LightSource
+from matplotlib import collections as mc
 from keras.preprocessing.image import img_to_array    # TODO: loading Keras/TF just for this function is overkill
 import svgwrite
 import re
@@ -81,10 +83,10 @@ def save_img2(name):
     out_filepath = 'output/' + name + '.png'
     if not os.path.exists('output'):
         os.makedirs('output')
-    print("Saving file...")
+    print("Saving to " + out_filepath + " ...")
     plt.savefig(out_filepath)
     plt.close()
-    print('Saved img to    ' + str(out_filepath))
+    print("Saved.")
 
 
 def draw_contour_map(tensor):
@@ -129,8 +131,8 @@ def draw_and_save_svg_lines(tensor, name):
     jitter = 0
     logtransform = False
     # strokecolour = 'rgb(233,116,81)'
-    strokewidth = 3.142
-    strokeopacity = 0.4
+    strokewidth = 0.1 * 3.142
+    strokeopacity = 0.95
 
     # Automatic configs
     out_filepath = 'output/' + name + '.svg'
@@ -167,12 +169,70 @@ def draw_and_save_svg_lines(tensor, name):
                                           Y * spacing + (jitter * np.random.normal())),
                                    end=(X * spacing + (jitter * np.random.normal()) + tensor[X,Y,1],
                                         Y * spacing + (jitter * np.random.normal()) + tensor[X,Y,0]),
-                                   stroke='rgb(' + str(256 - int(round(elevation_scaled[X,Y]))) + ',130,190)'))
+                                   stroke='rgb(' + str(256 - int(round(elevation_scaled[X,Y]))) + ',86,153)'))
 
     # Save the file
     print("Saving to " + out_filepath + " ...")
     d.save()
     print("Saved.")
+
+
+def draw_png_lines(tensor):
+    # Artistic configurations
+    magnification = 10
+    spacing = 3
+    intensity = 5.5
+    jitter = 0
+    logtransform = False
+    backgroundcolour = 'black'
+    # strokecolour = 'darkgreen'
+    strokewidth = 1
+    strokeopacity = 0.8
+
+    # Automatic configs
+    height, width, depth = np.shape(tensor)
+    dpi = plt.rcParams['figure.dpi']
+    plt.rcParams['figure.facecolor'] = backgroundcolour
+    plt.rcParams['axes.facecolor'] = backgroundcolour
+    figsize = magnification * (width / float(dpi)), \
+              magnification * (height / float(dpi))
+
+    # Initialise drawing
+    print("Generating drawing...")
+    fig, ax = pl.subplots(figsize=figsize)
+
+    # Transform data
+    if logtransform:
+        tensor = transform_log(tensor)
+    else:
+        tensor = (tensor - 128)
+    tensor = np.rot90(m=tensor, k=3) * intensity
+    elevation_scaled = (tensor[:,:,3] - np.min(tensor[:,:,3])) * (255 / (np.max(tensor[:,:,3]) - np.min(tensor[:,:,3])))
+
+    # Prepare the line collection
+    tensorlines = []
+    strokecolour_variation = []
+    for X in range(height):
+        for Y in range(width):
+            tensorlines.append([(X * spacing + (jitter * np.random.normal()),
+                                 Y * spacing + (jitter * np.random.normal())),
+                                (X * spacing + (jitter * np.random.normal()) + tensor[X, Y, 1],
+                                 Y * spacing + (jitter * np.random.normal()) + tensor[X, Y, 0])])
+            strokecolour_variation.append(256 - int(round(elevation_scaled[X, Y])))
+
+    strokecolours = [(red / 256,
+                      86 / 256,
+                      153 / 256) for red in strokecolour_variation]
+    lc = mc.LineCollection(tensorlines,
+                           colors=strokecolours,
+                           linewidths=strokewidth,
+                           alpha=strokeopacity)
+
+    # Draw the lines
+    ax.add_collection(lc)  # This draws the actual lines
+    ax.autoscale()
+    ax.axes.get_yaxis().set_visible(False)
+    ax.axes.get_xaxis().set_visible(False)
 
 
 def auto_name_increment(dir="."):
@@ -205,5 +265,11 @@ if __name__ == '__main__':
     # save_img2("00018")
     # save_img(normal, "00007")
 
-    draw_and_save_svg_lines(tensor=normal[:,:,:],
-                            name=auto_name_increment("./output"))
+    # draw_and_save_svg_lines(tensor=normal[:,:,:],
+    #                         name=auto_name_increment("./output"))
+
+    draw_png_lines(tensor=normal[:,:,:])
+    save_img2(name=auto_name_increment("./output"))
+
+    # TODO: kron
+    # TODO: kron + gaussian blur
