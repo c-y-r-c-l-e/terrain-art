@@ -179,17 +179,19 @@ def draw_and_save_svg_lines(tensor, name):
 
 def draw_png_lines(tensor):
     # Artistic configurations
-    magnification = 10
+    magnification = 8
+    kronscale = 4  # every (source-)pixel becomes a block of $kronscale by $kronscale pixels
     spacing = 3
-    intensity = 5.5
+    intensity = 55  # 5.5
     jitter = 0
     logtransform = False
     backgroundcolour = 'black'
     # strokecolour = 'darkgreen'
-    strokewidth = 1
-    strokeopacity = 0.8
+    strokewidth = 1.5  # 1
+    strokeopacity = 0.2
 
     # Automatic configs
+    tensor = np.kron(tensor, np.ones((kronscale, kronscale, 1)))  # Apply kronscale before determining imgsize etc
     height, width, depth = np.shape(tensor)
     dpi = plt.rcParams['figure.dpi']
     plt.rcParams['figure.facecolor'] = backgroundcolour
@@ -221,8 +223,8 @@ def draw_png_lines(tensor):
             strokecolour_variation.append(256 - int(round(elevation_scaled[X, Y])))
 
     strokecolours = [(red / 256,
-                      86 / 256,
-                      153 / 256) for red in strokecolour_variation]
+                      129 / 256,   # 86
+                      177 / 256) for red in strokecolour_variation]    # 53
     lc = mc.LineCollection(tensorlines,
                            colors=strokecolours,
                            linewidths=strokewidth,
@@ -271,5 +273,5 @@ if __name__ == '__main__':
     draw_png_lines(tensor=normal[:,:,:])
     save_img2(name=auto_name_increment("./output"))
 
-    # TODO: kron
-    # TODO: kron + gaussian blur
+    # TODO: gaussian blur scale
+    # TODO: generate bulk imgs for stopmotion
