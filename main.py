@@ -183,22 +183,22 @@ def draw_and_save_svg_lines(tensor, name):
 
 def draw_png_lines(tensor):
     # Artistic configurations
-    magnification = 8
-    spacing = 3           # Spacing between plotted lines
+    magnification = 7
+    spacing = 3.2           # Spacing between plotted lines
 
     apply_blurscaling = True     # Same as kronscaling, but with gaussian blur. If True, set intensity to something big
-    blurscale = 4.5
+    blurscale = 1.5
 
     apply_kronscaling = False    # Every (source-)pixel becomes a block of $kronscale by $kronscale pixels
     kronscale = 4
 
-    intensity = 55  # 5.5     #  ≈ Length of the lines
-    jitter = 0                #  Apply some randomness to all coordinates
+    intensity = 20  # 5.5     #  ≈ Length of the lines
+    jitter = 2                #  Apply some randomness to all coordinates
     logtransform = False
     backgroundcolour = 'black'
     # strokecolour = 'darkgreen'
-    strokewidth = 1.5  # 1
-    strokeopacity = 0.2
+    strokewidth = 2.4  # 1
+    strokeopacity = 0.4
 
     # Automatic configs
     if apply_blurscaling:
@@ -238,8 +238,8 @@ def draw_png_lines(tensor):
             strokecolour_variation.append(256 - int(round(elevation_scaled[X, Y])))
 
     strokecolours = [(red / 256,
-                      129 / 256,   # 86
-                      177 / 256) for red in strokecolour_variation]    # 53
+                      16 / 256,   # 86 or 129
+                      16 / 256) for red in strokecolour_variation]    # 53 or 177
     lc = mc.LineCollection(tensorlines,
                            colors=strokecolours,
                            linewidths=strokewidth,
@@ -255,13 +255,13 @@ def draw_png_lines(tensor):
 def auto_name_increment(dir="."):
     dirfiles = os.listdir(path=dir)
     numbered_dirfiles = [re.split(pattern='\.', string=f)[0] for f in dirfiles if
-                         re.search(pattern=r'\d\d\d\d\d\.(png|svg)', string=f)]
+                         re.search(pattern=r'\d\d\d\d\d(\.png|\.svg|$)', string=f)]
     if not numbered_dirfiles:
-        max_filenumber = 0
+        next_filenumber = 0
     else:
-        max_filenumber = max([int(x) for x in numbered_dirfiles]) + 1
-    max_filenumber = '{:05d}'.format(max_filenumber)
-    return max_filenumber
+        next_filenumber = max([int(x) for x in numbered_dirfiles]) + 1
+    next_filenumber = '{:05d}'.format(next_filenumber)
+    return next_filenumber
 
 
 def save_source(name):
