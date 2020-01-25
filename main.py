@@ -13,6 +13,7 @@ import svgwrite
 import re
 from datetime import datetime
 from shutil import copy2
+import noise
 
 alpha_elevation_mapping = [-11000, -10000, -9000, -8000, -7000, -6000, -5000, -4000, -3000, -2000, -1000,
                            -100, -50, -20, -10, -1, 0, 20, 40, 60, 80, 100, 120, 140, 160, 180, 200, 220,
@@ -83,8 +84,8 @@ def save_img(img_tensor, name):
     print('Saved img to   ' + str(out_filepath))
 
 
-def save_img2(name):
-    out_filepath = 'output/' + name + '.png'
+def save_img2(name):   # TODO: sort these two functions out
+    out_filepath = name + '.png'
     if not os.path.exists('output'):
         os.makedirs('output')
     print("Saving img to   " + out_filepath + " ...")
@@ -180,25 +181,28 @@ def draw_and_save_svg_lines(tensor, name):
     d.save()
     print("Saved.")
 
+def sigmoid(x):
+    return 1 / (1 + math.exp(-x))
 
-def draw_png_lines(tensor):
+
+def draw_png_lines(tensor, strokewidth, intensity, jitter, strokeopacity):
     # Artistic configurations
-    magnification = 7
-    spacing = 3.2           # Spacing between plotted lines
+    magnification = 1
+    spacing = 2           # Spacing between plotted lines
 
-    apply_blurscaling = True     # Same as kronscaling, but with gaussian blur. If True, set intensity to something big
-    blurscale = 1.5
+    apply_blurscaling = False     # Same as kronscaling, but with gaussian blur. If True, set intensity to something big
+    blurscale = 2
 
     apply_kronscaling = False    # Every (source-)pixel becomes a block of $kronscale by $kronscale pixels
-    kronscale = 4
+    kronscale = 1
 
-    intensity = 20  # 5.5     #  ≈ Length of the lines
-    jitter = 2                #  Apply some randomness to all coordinates
+    # intensity = 20  # 5.5     #  ≈ Length of the lines
+    # jitter = 2                #  Apply some randomness to all coordinates
     logtransform = False
     backgroundcolour = 'black'
     # strokecolour = 'darkgreen'
-    strokewidth = 2.4  # 1
-    strokeopacity = 0.4
+    # strokewidth = 2.4  # 1
+    # strokeopacity = 0.2
 
     # Automatic configs
     if apply_blurscaling:
@@ -238,8 +242,8 @@ def draw_png_lines(tensor):
             strokecolour_variation.append(256 - int(round(elevation_scaled[X, Y])))
 
     strokecolours = [(red / 256,
-                      16 / 256,   # 86 or 129
-                      16 / 256) for red in strokecolour_variation]    # 53 or 177
+                      129 / 256,   # 86 or 129
+                      177 / 256) for red in strokecolour_variation]    # 53 or 177
     lc = mc.LineCollection(tensorlines,
                            colors=strokecolours,
                            linewidths=strokewidth,
@@ -252,7 +256,9 @@ def draw_png_lines(tensor):
     ax.axes.get_xaxis().set_visible(False)
 
 
-def auto_name_increment(dir="."):
+def get_next_name_in_folder(dir):
+    if not os.path.exists(dir):
+        os.makedirs(dir)
     dirfiles = os.listdir(path=dir)
     numbered_dirfiles = [re.split(pattern='\.', string=f)[0] for f in dirfiles if
                          re.search(pattern=r'\d\d\d\d\d(\.png|\.svg|$)', string=f)]
@@ -278,6 +284,41 @@ def save_source(name):
     print("Saved.")
 
 
+def draw_and_save_bulk_png_lines(tensor, name):
+    # Artistic configurations  # TODO: refactor colours
+    number_of_frames = 70
+    strokewidth = 0.5
+    intensity = 5
+    jitter = 2
+    strokeopacity = 0.2
+
+    # Set up some perlin noise motions for the time dimension
+    motion = {0: np.zeros(number_of_frames),
+              1: np.zeros(number_of_frames),
+              2: np.zeros(number_of_frames)}
+    motion[0] = [1 + noise.pnoise1(f/number_of_frames, octaves=1) for f in range(number_of_frames)]
+    motion[1] = [1 + noise.pnoise1(f/number_of_frames, octaves=2) for f in range(number_of_frames)]
+    motion[2] = [1 + noise.pnoise1(f/number_of_frames, octaves=8, persistence=1.2) for f in range(number_of_frames)]
+
+    print("Start building animation in   " + name + "   ...")
+    for frame in range(number_of_frames):
+        draw_png_lines(tensor,
+                       strokewidth=strokewidth * motion[1][frame],
+                       intensity=intensity * motion[0][frame],
+                       jitter=jitter * motion[2][frame],
+                       strokeopacity=strokeopacity + 0.1 * motion[1][frame])
+        framename = get_next_name_in_folder(name)
+        save_img2(name + "/" + framename)
+        clean()
+
+
+def clean():
+    plt.close('all')
+
+def mirror_animation(name):
+    # TODO: write mirror function
+    return
+
 
 if __name__ == '__main__':
     startTime = datetime.now()
@@ -298,14 +339,18 @@ if __name__ == '__main__':
     # save_img(normal, "00007")
 
     # draw_and_save_svg_lines(tensor=normal[:,:,:],
-    #                         name=auto_name_increment("./output"))
+    #                         name=get_next_name_in_folder("./output"))
 
-    draw_png_lines(tensor=normal[:,:,:])
+    # draw_png_lines(tensor=normal[:,:,:])
+    #
+    # filename = get_next_name_in_folder("./output")
+    # save_img2(name=filename)
 
-    filename = auto_name_increment("./output")
-    save_img2(name=filename)
+    filename = get_next_name_in_folder("./output")
+    draw_and_save_bulk_png_lines(tensor=normal[:,:,:],
+                                 name="./output/" + filename)
     save_source(name=filename)
 
-    print("This took " + str(datetime.now() - startTime))
+    # mirror_animation(name="./output/" + filename)
 
-    # TODO: generate bulk imgs for stopmotion
+    print("This took " + str(datetime.now() - startTime))
