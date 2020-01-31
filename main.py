@@ -14,6 +14,9 @@ import re
 from datetime import datetime
 from shutil import copy2
 import noise
+import python_speech_features as psf
+from scipy.io import wavfile
+import sys
 
 alpha_elevation_mapping = [-11000, -10000, -9000, -8000, -7000, -6000, -5000, -4000, -3000, -2000, -1000,
                            -100, -50, -20, -10, -1, 0, 20, 40, 60, 80, 100, 120, 140, 160, 180, 200, 220,
@@ -67,10 +70,37 @@ def display_image_in_actual_size(tensor):
 
 
 def open_img(location, imagePath):
-    print("Opening source img   " + location + "/" + imagePath + " ...")
+    print("Opening source img   " + location + "/" + imagePath + "   ...")
     image = imageio.imread(os.path.join(location, imagePath)).astype(np.float)
     image = img_to_array(image)
     return image
+
+
+def open_audio(location, audioPath):
+    print("Opening source audio   " + location + "/" + audioPath + "   ...")
+    # https://docs.scipy.org/doc/scipy/reference/generated/scipy.io.wavfile.read.html#scipy.io.wavfile.read
+    # WAV format             Min         Max         NumPydtype
+    # 32-bit floating-point  -1.0        +1.0        float32
+    # 32-bit PCM             -2147483648 +2147483647 int32
+    # 16-bit PCM             -32768      +32767      int16
+    # 8-bit PCM               0           255        uint8
+    audio_samplerate, audio_raw = wavfile.read(filename=os.path.join(location, audioPath))
+    audio_length = audio_raw.shape[0] / audio_samplerate
+
+    return audio_raw, audio_length, audio_samplerate
+
+
+def get_features_from_audio(audio, samplerate, framerate):
+    print("Getting MFCCs from audio...")
+    mfcc = psf.mfcc(signal=audio,
+                    samplerate=audio_samplerate,
+                    winlen=2.5 * 1 / framerate,      # The window length is fixed to 2.5 times the step time
+                    winstep=1 / framerate,           # The step time is fixed to the framerate for the animation
+                    numcep=14,
+                    nfft=round(2.5 / framerate * audio_samplerate),
+                    winfunc=np.hanning)
+    return mfcc
+
 
 
 def save_img(img_tensor, name):
@@ -185,12 +215,20 @@ def sigmoid(x):
     return 1 / (1 + math.exp(-x))
 
 
-def draw_png_lines(tensor, strokewidth, intensity, jitter, strokeopacity):
+def draw_png_lines(tensor,
+                   strokewidth,
+                   intensity,
+                   jitter,
+                   strokeopacity,
+                   terrain_overrides_colour_channel,
+                   red=128,
+                   green=128,
+                   blue=128):
     # Artistic configurations
     magnification = 1
     spacing = 2           # Spacing between plotted lines
 
-    apply_blurscaling = False     # Same as kronscaling, but with gaussian blur. If True, set intensity to something big
+    apply_blurscaling = True     # Same as kronscaling, but with gaussian blur. If True, set intensity to something big
     blurscale = 2
 
     apply_kronscaling = False    # Every (source-)pixel becomes a block of $kronscale by $kronscale pixels
@@ -239,11 +277,25 @@ def draw_png_lines(tensor, strokewidth, intensity, jitter, strokeopacity):
                                  Y * spacing + (jitter * np.random.normal())),
                                 (X * spacing + (jitter * np.random.normal()) + tensor[X, Y, 1],
                                  Y * spacing + (jitter * np.random.normal()) + tensor[X, Y, 0])])
-            strokecolour_variation.append(256 - int(round(elevation_scaled[X, Y])))
+            try:
+                strokecolour_variation.append(256 - int(round(elevation_scaled[X, Y])))
+            except ValueError:
+                strokecolour_variation.append(0)
 
-    strokecolours = [(red / 256,
-                      129 / 256,   # 86 or 129
-                      177 / 256) for red in strokecolour_variation]    # 53 or 177
+    # the _terrain channel is determined by the terrain elevation
+    # the remaining two channels are determined through the parent function (=perlin or base)
+    if terrain_overrides_colour_channel == 'red':     # TODO: find a way to play more flexibly with colours
+        strokecolours = [(red_terrain / 256,
+                          green,
+                          blue) for red_terrain in strokecolour_variation]
+    elif terrain_overrides_colour_channel == 'green':
+        strokecolours = [(red,
+                          green_terrain / 256,
+                          blue) for green_terrain in strokecolour_variation]
+    elif terrain_overrides_colour_channel == 'blue':
+        strokecolours = [(red,
+                          green,
+                          blue_terrain / 256) for blue_terrain in strokecolour_variation]
     lc = mc.LineCollection(tensorlines,
                            colors=strokecolours,
                            linewidths=strokewidth,
@@ -284,32 +336,80 @@ def save_source(name):
     print("Saved.")
 
 
-def draw_and_save_bulk_png_lines(tensor, name):
+def draw_and_save_bulk_png_lines(tensor, name, anim_base):
     # Artistic configurations  # TODO: refactor colours
     number_of_frames = 70
     strokewidth = 0.5
-    intensity = 5
+    intensity = 10
     jitter = 2
-    strokeopacity = 0.2
+    strokeopacity = 0.75
+    terrain_influences_channel = 'red'
+    use_perlin = False
+    use_base = True
 
-    # Set up some perlin noise motions for the time dimension
-    motion = {0: np.zeros(number_of_frames),
-              1: np.zeros(number_of_frames),
-              2: np.zeros(number_of_frames)}
-    motion[0] = [1 + noise.pnoise1(f/number_of_frames, octaves=1) for f in range(number_of_frames)]
-    motion[1] = [1 + noise.pnoise1(f/number_of_frames, octaves=2) for f in range(number_of_frames)]
-    motion[2] = [1 + noise.pnoise1(f/number_of_frames, octaves=8, persistence=1.2) for f in range(number_of_frames)]
+    # Set mappings between MFCC features and artistic configs
+    mfcc_intensity = 0
+    mfcc_strokewdith = 1
+    mfcc_strokeopacity = 2
+    mfcc_red = 3                # TODO: implement long-term features
+    mfcc_green = 4
+    mfcc_blue = 12
+    mfcc_jitter = 6
 
-    print("Start building animation in   " + name + "   ...")
-    for frame in range(number_of_frames):
-        draw_png_lines(tensor,
-                       strokewidth=strokewidth * motion[1][frame],
-                       intensity=intensity * motion[0][frame],
-                       jitter=jitter * motion[2][frame],
-                       strokeopacity=strokeopacity + 0.1 * motion[1][frame])
-        framename = get_next_name_in_folder(name)
-        save_img2(name + "/" + framename)
-        clean()
+
+    if use_perlin and use_base:
+        sys.exit("Error: choose either use_perlin or use_base but not both")  # TODO: make a prettier error handler for this
+
+
+    if use_perlin:
+        # Set up some perlin noise motions for the time dimension
+        motion = {0: np.zeros(number_of_frames),
+                  1: np.zeros(number_of_frames),
+                  2: np.zeros(number_of_frames)}
+        motion[0] = [1 + noise.pnoise1(f/number_of_frames, octaves=1) for f in range(number_of_frames)]
+        motion[1] = [1 + noise.pnoise1(f/number_of_frames, octaves=2) for f in range(number_of_frames)]
+        motion[2] = [1 + noise.pnoise1(f/number_of_frames, octaves=8, persistence=1.2) for f in range(number_of_frames)]
+
+        print("Start building animation in   " + name + "   ...")
+        for frame in range(number_of_frames):
+            draw_png_lines(tensor,
+                           strokewidth=strokewidth * motion[1][frame],
+                           intensity=intensity * motion[0][frame],
+                           jitter=jitter * motion[2][frame],
+                           strokeopacity=strokeopacity + 0.1 * motion[1][frame])
+            framename = get_next_name_in_folder(name)
+            save_img2(name + "/" + framename)
+            clean()
+
+    if use_base:
+        # Scale the MFCC features to fitting ranges (ie. 0<=x<=1 for colours)
+        # print("np.shape(anim_base):                                 " + str(np.shape(anim_base)))
+        # print("np.shape(np.transpose(anim_base)):                   " + str(np.shape(np.transpose(anim_base))))
+        # print("np.shape(np.transpose(anim_base)[mfcc_intensity]):   " + str(np.shape(np.transpose(anim_base)[mfcc_intensity])))
+        bases = np.transpose(anim_base)
+        intensities = 2 * intensity * (bases[mfcc_intensity] - np.min(bases[mfcc_intensity]))/np.ptp(bases[mfcc_intensity])
+        strokewidths = np.clip(2 * strokewidth * (bases[mfcc_strokewdith] - np.min(bases[mfcc_strokewdith]))/np.ptp(bases[mfcc_strokewdith]), a_min=0.01, a_max=10)
+        strokeopacities = np.clip(strokeopacity * (bases[mfcc_strokeopacity] - np.min(bases[mfcc_strokeopacity]))/np.ptp(bases[mfcc_strokeopacity]), a_min=0, a_max=1)
+        reds = (bases[mfcc_red] - np.min(bases[mfcc_red]))/np.ptp(bases[mfcc_red])
+        greens = (bases[mfcc_green] - np.min(bases[mfcc_green]))/np.ptp(bases[mfcc_green])
+        blues = (bases[mfcc_blue] - np.min(bases[mfcc_blue]))/np.ptp(bases[mfcc_blue])
+        jitters = 2 * jitter * (bases[mfcc_jitter] - np.min(bases[mfcc_jitter]))/np.ptp(bases[mfcc_jitter])
+
+
+        print("Start building animation in   " + name + "   ...")
+        for frame in range(len(anim_base)):
+            draw_png_lines(tensor,
+                           intensity=intensities[frame],
+                           strokewidth=strokewidths[frame],
+                           strokeopacity=strokeopacities[frame],
+                           red=reds[frame],
+                           green=greens[frame],
+                           blue=blues[frame],
+                           terrain_overrides_colour_channel=terrain_influences_channel,
+                           jitter=jitters[frame])
+            framename = get_next_name_in_folder(name)
+            save_img2(name + "/" + framename)
+            clean()
 
 
 def clean():
@@ -322,33 +422,20 @@ def mirror_animation(name):
 
 if __name__ == '__main__':
     startTime = datetime.now()
-    # normal = open_img(".", "5-8-7.png")
-    # normal = open_img(".", "5-16-10.png")
+
+    # Config     # TODO: move this to somewhere smart
+    anim_framerate = 24
+
     normal = open_img(".", "7-65-42.png")
+    audio, audio_length, audio_samplerate = open_audio(".", "musicsample.wav")
+    audio_features = get_features_from_audio(audio, audio_samplerate, anim_framerate)
 
-    # print("np.shape(normal):    " + str(np.shape(normal)))
-    # print("normal[:,:,0:3]:    " + str(normal[:,:,0:3]))     # Dit zouden de "normals" moeten zijn
-    # print("normal[:,:,3]:    " + str(normal[:, :, 3]))       # Dit zou de "elevation" moeten zijn
-
-    # print("np.shape(normal[0,0,0:3]):    " + str(normal[0,0,0:3]))
-
-    # draw_contour_map(normal[:,:,3])
-    # draw_normals_map(normal[:,:,0:3])
-
-    # save_img2("00018")
-    # save_img(normal, "00007")
-
-    # draw_and_save_svg_lines(tensor=normal[:,:,:],
-    #                         name=get_next_name_in_folder("./output"))
-
-    # draw_png_lines(tensor=normal[:,:,:])
-    #
-    # filename = get_next_name_in_folder("./output")
-    # save_img2(name=filename)
+    # print("np.shape(audio_features):                            " + str(np.shape(audio_features)))
 
     filename = get_next_name_in_folder("./output")
     draw_and_save_bulk_png_lines(tensor=normal[:,:,:],
-                                 name="./output/" + filename)
+                                 name="./output/" + filename,
+                                 anim_base=audio_features)
     save_source(name=filename)
 
     # mirror_animation(name="./output/" + filename)
