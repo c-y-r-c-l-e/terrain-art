@@ -94,10 +94,10 @@ def get_features_from_audio(audio, samplerate, framerate):
     print("Getting MFCCs from audio...")
     mfcc = psf.mfcc(signal=audio,
                     samplerate=audio_samplerate,
-                    winlen=2.5 * 1 / framerate,      # The window length is fixed to 2.5 times the step time
+                    winlen=12 * 1 / framerate,      # The window length is fixed to 2.5 times the step time
                     winstep=1 / framerate,           # The step time is fixed to the framerate for the animation
                     numcep=14,
-                    nfft=round(2.5 / framerate * audio_samplerate),
+                    nfft=round(12 / framerate * audio_samplerate),
                     winfunc=np.hanning)
     return mfcc
 
@@ -223,12 +223,13 @@ def draw_png_lines(tensor,
                    terrain_overrides_colour_channel,
                    red=128,
                    green=128,
-                   blue=128):
+                   blue=128,
+                   subarray_size=256):
     # Artistic configurations
     magnification = 1
     spacing = 2           # Spacing between plotted lines
 
-    apply_blurscaling = True     # Same as kronscaling, but with gaussian blur. If True, set intensity to something big
+    apply_blurscaling = False     # Same as kronscaling, but with gaussian blur. If True, set intensity to something big
     blurscale = 2
 
     apply_kronscaling = False    # Every (source-)pixel becomes a block of $kronscale by $kronscale pixels
@@ -243,6 +244,8 @@ def draw_png_lines(tensor,
     # strokeopacity = 0.2
 
     # Automatic configs
+    tensor = tensor[0:subarray_size, 0:subarray_size, :]     # TODO: make position of subarray variable
+
     if apply_blurscaling:
         tensor = transform.pyramid_expand(image=tensor,
                                           upscale=blurscale,
@@ -344,16 +347,17 @@ def draw_and_save_bulk_png_lines(tensor, name, anim_base):
     jitter = 2
     strokeopacity = 0.75
     terrain_influences_channel = 'red'
+    subarray_size = 40                   #    2 <= x <= 256
     use_perlin = False
     use_base = True
 
     # Set mappings between MFCC features and artistic configs
-    mfcc_intensity = 0
+    mfcc_intensity = 10
     mfcc_strokewdith = 1
     mfcc_strokeopacity = 2
     mfcc_red = 3                # TODO: implement long-term features
-    mfcc_green = 4
-    mfcc_blue = 12
+    mfcc_green = 0
+    mfcc_blue = 0
     mfcc_jitter = 6
 
 
@@ -362,24 +366,25 @@ def draw_and_save_bulk_png_lines(tensor, name, anim_base):
 
 
     if use_perlin:
-        # Set up some perlin noise motions for the time dimension
-        motion = {0: np.zeros(number_of_frames),
-                  1: np.zeros(number_of_frames),
-                  2: np.zeros(number_of_frames)}
-        motion[0] = [1 + noise.pnoise1(f/number_of_frames, octaves=1) for f in range(number_of_frames)]
-        motion[1] = [1 + noise.pnoise1(f/number_of_frames, octaves=2) for f in range(number_of_frames)]
-        motion[2] = [1 + noise.pnoise1(f/number_of_frames, octaves=8, persistence=1.2) for f in range(number_of_frames)]
-
-        print("Start building animation in   " + name + "   ...")
-        for frame in range(number_of_frames):
-            draw_png_lines(tensor,
-                           strokewidth=strokewidth * motion[1][frame],
-                           intensity=intensity * motion[0][frame],
-                           jitter=jitter * motion[2][frame],
-                           strokeopacity=strokeopacity + 0.1 * motion[1][frame])
-            framename = get_next_name_in_folder(name)
-            save_img2(name + "/" + framename)
-            clean()
+        sys.exit()
+    #     # Set up some perlin noise motions for the time dimension
+    #     motion = {0: np.zeros(number_of_frames),
+    #               1: np.zeros(number_of_frames),
+    #               2: np.zeros(number_of_frames)}
+    #     motion[0] = [1 + noise.pnoise1(f/number_of_frames, octaves=1) for f in range(number_of_frames)]
+    #     motion[1] = [1 + noise.pnoise1(f/number_of_frames, octaves=2) for f in range(number_of_frames)]
+    #     motion[2] = [1 + noise.pnoise1(f/number_of_frames, octaves=8, persistence=1.2) for f in range(number_of_frames)]
+    #
+    #     print("Start building animation in   " + name + "   ...")
+    #     for frame in range(number_of_frames):
+    #         draw_png_lines(tensor,
+    #                        strokewidth=strokewidth * motion[1][frame],
+    #                        intensity=intensity * motion[0][frame],
+    #                        jitter=jitter * motion[2][frame],
+    #                        strokeopacity=strokeopacity + 0.1 * motion[1][frame])
+    #         framename = get_next_name_in_folder(name)
+    #         save_img2(name + "/" + framename)
+    #         clean()
 
     if use_base:
         # Scale the MFCC features to fitting ranges (ie. 0<=x<=1 for colours)
@@ -395,7 +400,6 @@ def draw_and_save_bulk_png_lines(tensor, name, anim_base):
         blues = (bases[mfcc_blue] - np.min(bases[mfcc_blue]))/np.ptp(bases[mfcc_blue])
         jitters = 2 * jitter * (bases[mfcc_jitter] - np.min(bases[mfcc_jitter]))/np.ptp(bases[mfcc_jitter])
 
-
         print("Start building animation in   " + name + "   ...")
         for frame in range(len(anim_base)):
             draw_png_lines(tensor,
@@ -406,7 +410,8 @@ def draw_and_save_bulk_png_lines(tensor, name, anim_base):
                            green=greens[frame],
                            blue=blues[frame],
                            terrain_overrides_colour_channel=terrain_influences_channel,
-                           jitter=jitters[frame])
+                           jitter=jitters[frame],
+                           subarray_size=subarray_size)
             framename = get_next_name_in_folder(name)
             save_img2(name + "/" + framename)
             clean()
@@ -415,9 +420,14 @@ def draw_and_save_bulk_png_lines(tensor, name, anim_base):
 def clean():
     plt.close('all')
 
-def mirror_animation(name):
-    # TODO: write mirror function
-    return
+
+# TODO: pick random subarray from img
+# TODO: set fixed pyplot margins
+# TODO: set fixed output img size
+# TODO: make pyplot bkg black
+# TODO: implement long-term features
+# TODO: implement mapping switch
+# TODO: move configs to some object
 
 
 if __name__ == '__main__':
@@ -429,6 +439,7 @@ if __name__ == '__main__':
     normal = open_img(".", "7-65-42.png")
     audio, audio_length, audio_samplerate = open_audio(".", "musicsample.wav")
     audio_features = get_features_from_audio(audio, audio_samplerate, anim_framerate)
+    print("Animation will be " + str(len(audio_features)) + " frames long.")
 
     # print("np.shape(audio_features):                            " + str(np.shape(audio_features)))
 
@@ -437,7 +448,5 @@ if __name__ == '__main__':
                                  name="./output/" + filename,
                                  anim_base=audio_features)
     save_source(name=filename)
-
-    # mirror_animation(name="./output/" + filename)
 
     print("This took " + str(datetime.now() - startTime))
