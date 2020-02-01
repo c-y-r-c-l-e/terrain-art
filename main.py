@@ -119,7 +119,7 @@ def save_img2(name):   # TODO: sort these two functions out
     if not os.path.exists('output'):
         os.makedirs('output')
     print("Saving img to   " + out_filepath + " ...")
-    plt.savefig(out_filepath)
+    plt.savefig(out_filepath, bbox_inches = 'tight', pad_inches = 0)
     plt.close()
     print("Saved.")
 
@@ -226,11 +226,12 @@ def draw_png_lines(tensor,
                    blue=128,
                    subarray_size=256):
     # Artistic configurations
-    magnification = 1
-    spacing = 2           # Spacing between plotted lines
+    magnification = 2
+    spacing = 5           # Spacing between plotted lines
+    margin = 0.2
 
-    apply_blurscaling = False     # Same as kronscaling, but with gaussian blur. If True, set intensity to something big
-    blurscale = 2
+    apply_blurscaling = True     # Same as kronscaling, but with gaussian blur. If True, set intensity to something big
+    blurscale = 3
 
     apply_kronscaling = False    # Every (source-)pixel becomes a block of $kronscale by $kronscale pixels
     kronscale = 1
@@ -244,7 +245,12 @@ def draw_png_lines(tensor,
     # strokeopacity = 0.2
 
     # Automatic configs
-    tensor = tensor[0:subarray_size, 0:subarray_size, :]     # TODO: make position of subarray variable
+    tensor = tensor[0:subarray_size, 0:subarray_size, :]     # TODO: make position of subarray variable (I)
+
+    if not apply_blurscaling:
+        blurscale = 1
+    if not apply_kronscaling:
+        kronscale = 1
 
     if apply_blurscaling:
         tensor = transform.pyramid_expand(image=tensor,
@@ -253,6 +259,7 @@ def draw_png_lines(tensor,
     if apply_kronscaling:
         tensor = np.kron(tensor, np.ones((kronscale, kronscale, 1)))  # Apply kronscale before determining imgsize etc
     height, width, depth = np.shape(tensor)
+    margin = margin * height
     dpi = plt.rcParams['figure.dpi']
     plt.rcParams['figure.facecolor'] = backgroundcolour
     plt.rcParams['axes.facecolor'] = backgroundcolour
@@ -306,9 +313,22 @@ def draw_png_lines(tensor,
 
     # Draw the lines
     ax.add_collection(lc)  # This draws the actual lines
-    ax.autoscale()
     ax.axes.get_yaxis().set_visible(False)
     ax.axes.get_xaxis().set_visible(False)
+    limit = blurscale * kronscale * spacing * subarray_size
+    limits = [-1 * margin,              # left
+              limit + margin,           # right
+              -1 * margin,              # bottom
+              limit + margin]           # top
+    # print("height or width:        " + str(height))
+    # print("blurscale:              " + str(blurscale))
+    # print("kronscale:              " + str(kronscale))
+    # print("spacing:                " + str(spacing))
+    # print("subarray_size:          " + str(subarray_size))
+    # print("limit:                  " + str(limit))
+    # print("margin:                 " + str(margin))
+    # print("limits:                 " + str(limits))
+    ax.axis(limits)
 
 
 def get_next_name_in_folder(dir):
@@ -347,17 +367,17 @@ def draw_and_save_bulk_png_lines(tensor, name, anim_base):
     jitter = 2
     strokeopacity = 0.75
     terrain_influences_channel = 'red'
-    subarray_size = 40                   #    2 <= x <= 256
+    subarray_size = 57                   #    2 <= x <= 256
     use_perlin = False
     use_base = True
 
     # Set mappings between MFCC features and artistic configs
     mfcc_intensity = 10
-    mfcc_strokewdith = 1
-    mfcc_strokeopacity = 2
+    mfcc_strokewdith = 0
+    mfcc_strokeopacity = 4
     mfcc_red = 3                # TODO: implement long-term features
-    mfcc_green = 0
-    mfcc_blue = 0
+    mfcc_green = 1
+    mfcc_blue = 2
     mfcc_jitter = 6
 
 
@@ -422,12 +442,12 @@ def clean():
 
 
 # TODO: pick random subarray from img
-# TODO: set fixed pyplot margins
 # TODO: set fixed output img size
 # TODO: make pyplot bkg black
 # TODO: implement long-term features
 # TODO: implement mapping switch
 # TODO: move configs to some object
+# TODO: add support for rectangular views
 
 
 if __name__ == '__main__':
