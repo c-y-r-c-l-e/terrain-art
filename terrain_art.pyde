@@ -1,22 +1,48 @@
+output_height = 720
+output_width = 1024
+source_img_path = "7-65-42.png"
+magnify = 2.5
+
+def init_source_img(path):
+    normal = loadImage(path)
+    image(normal, output_height, output_width)  # Display the img where we don't see it
+    loadPixels()
+    return normal
+
 def setup():
-    size(200,200)
+    size(output_width, output_height)
     background(0)
 
 def draw():
-    tensor = [[14, 84, 94, 68, 76, 56, 22, 40, 96, 03],
-              [90, 31, 58, 40, 01, 55, 72, 20, 77, 83],
-              [30, 53, 32, 72, 74, 65, 29, 93, 69, 26],
-              [16, 35, 88, 58, 74, 10, 85, 62, 93, 01],
-              [98, 79, 19, 12, 53, 42, 78, 52, 64, 72],
-              [82, 76, 51, 54, 16, 51, 99, 13, 78, 15],
-              [49, 72, 63, 38, 47, 93, 28, 94, 64, 48],
-              [48, 68, 37, 90, 21, 13, 04, 25, 73, 66],
-              [78, 06, 32, 33, 91, 01, 81, 68, 83, 02],
-              [80, 95, 99, 64, 23, 82, 35, 40, 40, 58]]
-    for X in range(10):
-        for Y in range(10):
-            stroke(128)
-            line(10 * X + 50, 
-                 10 * Y + 50, 
-                 X + tensor[X][Y] + 50, 
-                 Y + tensor[X][Y] + 50)
+    background(0)
+    normal = init_source_img(source_img_path)
+    root = int(sqrt(len(normal.pixels)))
+    random_green = random(0, 255)
+    for i in range(len(normal.pixels)):
+        i_elevation_alpha = (normal.pixels[i] >> 24) & 0xFF
+        i_normal_red = (normal.pixels[i] >> 16) & 0xFF
+        i_normal_green = (normal.pixels[i] >> 8) & 0xFF
+        i_normal_blue = normal.pixels[i] & 0xFF
+        
+        X = (i % root) * magnify
+        Y = (i // root) * magnify
+        
+        X_dest = X + magnify * 0.0390625 * (i_normal_red - 128)
+        Y_dest = Y + magnify * 0.0390625 * (i_normal_green - 128)
+        
+        # print(str(i) + "   " + 
+        #       str(X) + "   " + 
+        #       str(Y) + "   " + 
+        #       str(X_dest) + "   " + 
+        #       str(Y_dest) + "   " + 
+        #       str(hex(normal.pixels[i])) + "   " + 
+        #       str(i_elevation_alpha) + "   " +
+        #       str(i_normal_red) + "   " +
+        #       str(i_normal_green) + "   " +
+        #       str(i_normal_blue))
+        stroke(i_elevation_alpha, random_green, 22)   # Use the alpha-encoded elevation for red and a random value (per draw) for green
+        strokeWeight(0.5)
+        line(X + 50, 
+             Y + 50, 
+             X_dest + 50, 
+             Y_dest + 50)
