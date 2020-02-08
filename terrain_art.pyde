@@ -1,14 +1,17 @@
 # User settings
-output_height = 720
 output_width = 1024
+output_height = 720
 source_img_path = "7-65-42.png"
-magnify = 2.5
-subarray_xlim = (95, 105)            # 0 <= xmin < xmax <= 256
-subarray_ylim = (85, 95)           # 0 <= ymin < ymax <= 256
+subarray_xlim = (205, 225)            # 0 <= xmin < xmax <= 256
+subarray_ylim = (85, 105)             # 0 <= ymin < ymax <= 256
 
 # Globals
 counter = 0
 i = 0
+window = (0.05 * output_width,       #  (left, right, top, bottom)
+          0.95 * output_width,
+          0.05 * output_height, 
+          0.95 * output_height)
 
 
 def initialise_img(path):
@@ -31,19 +34,43 @@ def restart_drawing():
     global subwidth
     global subheight
     global root
+    global elevation_alpha
+    global normal_red
+    global normal_green
+    global random_blue
+    global Xs
+    global Ys
+    global Xs_dest
+    global Ys_dest
+
     background(0)
     subwidth = subarray_xlim[1] - subarray_xlim[0]
     subheight = subarray_ylim[1] - subarray_ylim[0]
     root = int(sqrt(len(normal.pixels)))    
+    
+    # Keep only those values from the pixel list that are within the bounds of the subarray
     sub = [p for p in range(len(normal.pixels)) if 
            (p % root) >= subarray_xlim[0] and 
            (p % root) < subarray_xlim[1] and 
            (p // root) >= subarray_ylim[0] and 
            (p // root) < subarray_ylim[1]]
+    
+    # Extract values from the png-encoded terrain data
+    elevation_alpha = [(normal.pixels[sub[i]] >> 24) & 0xFF for i in range(len(sub))]
+    normal_red = [((normal.pixels[sub[i]] >> 16) & 0xFF) - 128 for i in range(len(sub))]
+    normal_green = [((normal.pixels[sub[i]] >> 8) & 0xFF) - 128 for i in range(len(sub))]
+    normal_blue = [(normal.pixels[sub[i]] & 0xFF) - 128 for i in range(len(sub))]
+    
+    random_blue = random(0, 255)                  # Pick a random value for the blue channel
+    
+    Xs = [sub[i] % root for i in range(len(sub))]
+    Ys = [sub[i] // root for i in range(len(sub))]
+    Xs_dest = [Xs[i] + 0.0390625 * normal_red[i] * (output_width / subwidth) for i in range(len(sub))] 
+    Ys_dest = [Ys[i] + 0.0390625 * normal_green[i] * (output_height / subheight) for i in range(len(sub))]
 
 
 def draw():
-    global counter
+    global counter     # TODO sort out these globals
     global normal
     global i
     global sub
@@ -52,32 +79,47 @@ def draw():
     global root
     global subarray_xlim
     global subarray_ylim
+    global elevation_alpha
+    global normal_red
+    global normal_green
+    global random_blue
+    global Xs
+    global Ys
+    global Xs_dest
+    global Ys_dest
+    global window
     
     if counter == 0:
         restart_drawing()
-
-    random_green = random(0, 255)           # Pick a random value for the green channel
     
-    # Extract values from the png-encoded terrain data
-    i_elevation_alpha = (normal.pixels[sub[i]] >> 24) & 0xFF
-    i_normal_red = (normal.pixels[sub[i]] >> 16) & 0xFF
-    i_normal_green = (normal.pixels[sub[i]] >> 8) & 0xFF
-    i_normal_blue = normal.pixels[sub[i]] & 0xFF
+    # Get absolute coordinates
+    X = Xs[i]
+    Y = Ys[i]
+    X_dest = Xs_dest[i]
+    Y_dest = Ys_dest[i]
     
-    # Get coordinates from the 1D list of pixels
-    X = (sub[i] % root) * magnify
-    Y = (sub[i] // root) * magnify
+    # Calculate coordinates for subarray stretched out to entire canvas
+    X_zoomed = map(X, min(Xs), max(Xs), window[0], window[1])
+    Y_zoomed = map(Y, min(Ys), max(Ys), window[2], window[3])
+    X_zoomed_dest = map(X_dest, min(Xs), max(Xs), window[0], window[1])
+    Y_zoomed_dest = map(Y_dest, min(Ys), max(Ys), window[2], window[3])
     
-    X_dest = X + magnify * 0.0390625 * (i_normal_red - 128)
-    Y_dest = Y + magnify * 0.0390625 * (i_normal_green - 128)
+    # print("   i: " + str(i) + 
+    #       "   sub[i]: " + str(sub[i]) + 
+    #       "   X: " + str(X) + 
+    #       "   Y: " + str(Y) + 
+    #       "   X_dest: " + str(int(X_dest)) + 
+    #       "   Y_dest: " + str(int(Y_dest)) + 
+    #       "   X_zoomed: " + str(round(X_zoomed, 1)) + 
+    #       "   Y_zoomed: " + str(round(Y_zoomed, 1)) + 
+    #       "   X_zoomed_dest: " + str(round(X_zoomed_dest, 1)) + 
+    #       "   Y_zoomed_dest: " + str(round(Y_zoomed_dest, 1)))
     
     # Draw the lines from C to C_dest
-    stroke(i_elevation_alpha, random_green, 22)   # Use the alpha-encoded elevation for red and a random value (per draw) for green
-    strokeWeight(0.5)
-    line(X + 50, 
-         Y + 50, 
-         X_dest + 50, 
-         Y_dest + 50)
+    random_green = random(0, 255)                  # Pick a random value for the green channel
+    stroke(elevation_alpha[i], random_green, random_blue)   # Use the alpha-encoded elevation for red, a random value (per draw) for green, and a random value (per iteration) for blue
+    strokeWeight(20)
+    line(X_zoomed, Y_zoomed, X_zoomed_dest, Y_zoomed_dest)
     
     # Update counters
     i = (i + 1) % len(sub)
