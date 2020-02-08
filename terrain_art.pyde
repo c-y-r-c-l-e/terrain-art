@@ -4,6 +4,7 @@ output_height = 720
 source_img_path = "7-65-42.png"
 subarray_xlim = (205, 225)            # 0 <= xmin < xmax <= 256
 subarray_ylim = (85, 105)             # 0 <= ymin < ymax <= 256
+line_per_frame = True
 
 # Globals
 i = 0
@@ -48,7 +49,7 @@ def restart_drawing():
     root = int(sqrt(len(normal.pixels)))   
     
     # Select a new random subarray
-    x_size = int(random(2, 30))
+    x_size = int(random(2, 100))
     y_size = int(0.703125 * x_size)
     subarray_xmin = int(random(0, root - 1))
     subarray_xlim = (subarray_xmin, subarray_xmin + min(256, x_size))             # 0 <= xmin < xmax <= 256
@@ -79,7 +80,7 @@ def restart_drawing():
     normal_blue = [(normal.pixels[sub[i]] & 0xFF) - 128 for i in range(len(sub))]
     
     # Calculate colours
-    elevation_alpha = [map(alpha, min(elevation_alpha), max(elevation_alpha), 0, 255) for alpha in elevation_alpha]
+    elevation_alpha = [map(alpha, min(elevation_alpha), max(elevation_alpha), 0, 255) for alpha in elevation_alpha]   # Stretch up the reds
     random_green = random(0, 255)
     random_blue = random(0, 255)
     
@@ -89,7 +90,7 @@ def restart_drawing():
     Ys_dest = [Ys[i] + 0.0390625 * normal_green[i] * (output_height / subheight) for i in range(len(sub))]
 
 
-def draw():
+def draw_lines():
     global normal
     global i
     global sub
@@ -108,10 +109,6 @@ def draw():
     global Xs_dest
     global Ys_dest
     global window
-    
-    if i == 0:
-        restart_drawing()
-    
     # Get absolute coordinates
     X = Xs[i]
     Y = Ys[i]
@@ -124,24 +121,38 @@ def draw():
     X_zoomed_dest = map(X_dest, min(Xs), max(Xs), window[0], window[1])
     Y_zoomed_dest = map(Y_dest, min(Ys), max(Ys), window[2], window[3])
     
-    print("   i: " + str(i) + 
-          "   sub[i]: " + str(sub[i]) + 
-          "   len(sub): " + str(len(sub)) +
-          "   X: " + str(X) + 
-          "   Y: " + str(Y) + 
-          "   X_dest: " + str(int(X_dest)) + 
-          "   Y_dest: " + str(int(Y_dest)) + 
-          "   X_zoomed: " + str(round(X_zoomed, 1)) + 
-          "   Y_zoomed: " + str(round(Y_zoomed, 1)) + 
-          "   X_zoomed_dest: " + str(round(X_zoomed_dest, 1)) + 
-          "   Y_zoomed_dest: " + str(round(Y_zoomed_dest, 1)) + 
-          "   elevation_alpha[i]: " + str(elevation_alpha[i])
-          )
+    # print("   i: " + str(i) + 
+    #       "   sub[i]: " + str(sub[i]) + 
+    #       "   len(sub): " + str(len(sub)) +
+    #       "   X: " + str(X) + 
+    #       "   Y: " + str(Y) + 
+    #       "   X_dest: " + str(int(X_dest)) + 
+    #       "   Y_dest: " + str(int(Y_dest)) + 
+    #       "   X_zoomed: " + str(round(X_zoomed, 1)) + 
+    #       "   Y_zoomed: " + str(round(Y_zoomed, 1)) + 
+    #       "   X_zoomed_dest: " + str(round(X_zoomed_dest, 1)) + 
+    #       "   Y_zoomed_dest: " + str(round(Y_zoomed_dest, 1)) + 
+    #       "   elevation_alpha[i]: " + str(elevation_alpha[i])
+    #       )
     
     # Draw the lines from C to C_dest
-    stroke(elevation_alpha[i], random_green, random_blue)   # Use the alpha-encoded elevation for red and random values (per square) for green and blue
+    stroke(elevation_alpha[i], random_green, random_blue, 200)   # Use the alpha-encoded elevation for red and random values (per square) for green and blue
     strokeWeight(500 / (subwidth + subheight))
     line(X_zoomed, Y_zoomed, X_zoomed_dest, Y_zoomed_dest)
     
     # Update counters
     i = (i + 1) % len(sub)
+
+
+def draw():
+    global i
+    global sub
+    
+    if i == 0:
+        restart_drawing()
+    
+    if line_per_frame:
+        draw_lines()
+    else:
+        for i in range(len(sub)):
+            draw_lines()
