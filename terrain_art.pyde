@@ -6,7 +6,6 @@ subarray_xlim = (205, 225)            # 0 <= xmin < xmax <= 256
 subarray_ylim = (85, 105)             # 0 <= ymin < ymax <= 256
 
 # Globals
-counter = 0
 i = 0
 window = (0.05 * output_width,       #  (left, right, top, bottom)
           0.95 * output_width,
@@ -37,6 +36,7 @@ def restart_drawing():
     global elevation_alpha
     global normal_red
     global normal_green
+    global random_green
     global random_blue
     global Xs
     global Ys
@@ -44,16 +44,33 @@ def restart_drawing():
     global Ys_dest
 
     background(0)
-    subwidth = subarray_xlim[1] - subarray_xlim[0]
-    subheight = subarray_ylim[1] - subarray_ylim[0]
-    root = int(sqrt(len(normal.pixels)))    
     
+    root = int(sqrt(len(normal.pixels)))   
+    
+    # Select a new random subarray
+    x_size = int(random(2, 30))
+    y_size = int(0.703125 * x_size)
+    subarray_xmin = int(random(0, root - 1))
+    subarray_xlim = (subarray_xmin, subarray_xmin + min(256, x_size))             # 0 <= xmin < xmax <= 256
+    subarray_ymin = int(random(0, root - 1))
+    subarray_ylim = (subarray_ymin, subarray_ymin + min(256, y_size))             # 0 <= ymin < ymax <= 256
+    
+    subwidth = 1 + subarray_xlim[1] - subarray_xlim[0]
+    subheight = 1 + subarray_ylim[1] - subarray_ylim[0]
+    
+    print("subarray:  " + 
+          str(subarray_xlim[0]) + ", " + 
+          str(subarray_xlim[1]) + ", " + 
+          str(subarray_ylim[0]) + ", " + 
+          str(subarray_ylim[1]))
+    print("sub size:  " + str(subwidth) + " x " + str(subheight))
+ 
     # Keep only those values from the pixel list that are within the bounds of the subarray
     sub = [p for p in range(len(normal.pixels)) if 
            (p % root) >= subarray_xlim[0] and 
-           (p % root) < subarray_xlim[1] and 
+           (p % root) <= subarray_xlim[1] and 
            (p // root) >= subarray_ylim[0] and 
-           (p // root) < subarray_ylim[1]]
+           (p // root) <= subarray_ylim[1]]
     
     # Extract values from the png-encoded terrain data
     elevation_alpha = [(normal.pixels[sub[i]] >> 24) & 0xFF for i in range(len(sub))]
@@ -61,7 +78,10 @@ def restart_drawing():
     normal_green = [((normal.pixels[sub[i]] >> 8) & 0xFF) - 128 for i in range(len(sub))]
     normal_blue = [(normal.pixels[sub[i]] & 0xFF) - 128 for i in range(len(sub))]
     
-    random_blue = random(0, 255)                  # Pick a random value for the blue channel
+    # Calculate colours
+    elevation_alpha = [map(alpha, min(elevation_alpha), max(elevation_alpha), 0, 255) for alpha in elevation_alpha]
+    random_green = random(0, 255)
+    random_blue = random(0, 255)
     
     Xs = [sub[i] % root for i in range(len(sub))]
     Ys = [sub[i] // root for i in range(len(sub))]
@@ -70,7 +90,6 @@ def restart_drawing():
 
 
 def draw():
-    global counter     # TODO sort out these globals
     global normal
     global i
     global sub
@@ -82,6 +101,7 @@ def draw():
     global elevation_alpha
     global normal_red
     global normal_green
+    global random_green
     global random_blue
     global Xs
     global Ys
@@ -89,7 +109,7 @@ def draw():
     global Ys_dest
     global window
     
-    if counter == 0:
+    if i == 0:
         restart_drawing()
     
     # Get absolute coordinates
@@ -104,23 +124,24 @@ def draw():
     X_zoomed_dest = map(X_dest, min(Xs), max(Xs), window[0], window[1])
     Y_zoomed_dest = map(Y_dest, min(Ys), max(Ys), window[2], window[3])
     
-    # print("   i: " + str(i) + 
-    #       "   sub[i]: " + str(sub[i]) + 
-    #       "   X: " + str(X) + 
-    #       "   Y: " + str(Y) + 
-    #       "   X_dest: " + str(int(X_dest)) + 
-    #       "   Y_dest: " + str(int(Y_dest)) + 
-    #       "   X_zoomed: " + str(round(X_zoomed, 1)) + 
-    #       "   Y_zoomed: " + str(round(Y_zoomed, 1)) + 
-    #       "   X_zoomed_dest: " + str(round(X_zoomed_dest, 1)) + 
-    #       "   Y_zoomed_dest: " + str(round(Y_zoomed_dest, 1)))
+    print("   i: " + str(i) + 
+          "   sub[i]: " + str(sub[i]) + 
+          "   len(sub): " + str(len(sub)) +
+          "   X: " + str(X) + 
+          "   Y: " + str(Y) + 
+          "   X_dest: " + str(int(X_dest)) + 
+          "   Y_dest: " + str(int(Y_dest)) + 
+          "   X_zoomed: " + str(round(X_zoomed, 1)) + 
+          "   Y_zoomed: " + str(round(Y_zoomed, 1)) + 
+          "   X_zoomed_dest: " + str(round(X_zoomed_dest, 1)) + 
+          "   Y_zoomed_dest: " + str(round(Y_zoomed_dest, 1)) + 
+          "   elevation_alpha[i]: " + str(elevation_alpha[i])
+          )
     
     # Draw the lines from C to C_dest
-    random_green = random(0, 255)                  # Pick a random value for the green channel
-    stroke(elevation_alpha[i], random_green, random_blue)   # Use the alpha-encoded elevation for red, a random value (per draw) for green, and a random value (per iteration) for blue
-    strokeWeight(20)
+    stroke(elevation_alpha[i], random_green, random_blue)   # Use the alpha-encoded elevation for red and random values (per square) for green and blue
+    strokeWeight(500 / (subwidth + subheight))
     line(X_zoomed, Y_zoomed, X_zoomed_dest, Y_zoomed_dest)
     
     # Update counters
     i = (i + 1) % len(sub)
-    counter = (counter + 1) % (subwidth * subheight) 
