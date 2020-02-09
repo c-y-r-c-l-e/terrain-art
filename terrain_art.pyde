@@ -4,9 +4,12 @@ output_height = 720
 # source_img_path = "7-65-42.png"    # Netherlands
 source_img_path = "6-19-43.png"    # Tierra del Fuego
 line_per_frame = False
-jitter_start = 0.1
-jitter_stop = 0.2
+jitter_start_range = 1
+jitter_start_speed = 0.02
+jitter_end_range = 1
+jitter_end_speed = 0.02
 swap_rg = True
+keep = 220          #  0 <= x <= 255
 
 # Globals
 i = 0
@@ -54,7 +57,7 @@ def restart_drawing():
     root = int(sqrt(len(normal.pixels)))   
     
     # Select a new random subarray
-    x_size = int(random(10, 50))
+    x_size = int(random(10, 30))
     y_size = int(0.703125 * x_size)
     subarray_xmin = int(random(0, root - 1))
     subarray_xlim = (subarray_xmin, subarray_xmin + min(256, x_size))             # 0 <= xmin < xmax <= 256
@@ -99,9 +102,10 @@ def restart_drawing():
         Ys_dest = [Ys[i] + 0.0390625 * normal_red[i] * (output_height / subheight) for i in range(len(sub))]        
 
 
-def draw_lines():
+def draw_line():
     global normal  # TODO: sort out these globals
     global i
+    global j
     global sub
     global subwidth
     global subheight
@@ -118,14 +122,27 @@ def draw_lines():
     global Xs_dest
     global Ys_dest
     global window
-    global jitter_start
-    global jitter_stop
+    global jitter_start_range
+    global jitter_start_speed
+    global jitter_end_range
+    global jitter_end_speed
     global line_per_frame
+    
+    # Calculate jitter
+    noiseSeed(4)
+    noiseDetail(4, 0.5)
+    X_jitter = (jitter_start_range * noise(jitter_start_speed * j))
+    noiseSeed(5)
+    Y_jitter = (jitter_start_range * noise(jitter_start_speed * j))
+    X_dest_jitter = (jitter_end_range * noise(jitter_end_speed * j))  # TODO: add vector magnitude somehow
+    noiseSeed(6)
+    Y_dest_jitter = (jitter_end_range * noise(jitter_end_speed * j))
+    
     # Get absolute coordinates
-    X = Xs[i] + (jitter_start * randomGaussian())
-    Y = Ys[i] + (jitter_start * randomGaussian())
-    X_dest = Xs_dest[i] + (jitter_stop * randomGaussian())
-    Y_dest = Ys_dest[i] + (jitter_stop * randomGaussian())
+    X = Xs[i] + X_jitter
+    Y = Ys[i] + Y_jitter
+    X_dest = Xs_dest[i] + X_dest_jitter
+    Y_dest = Ys_dest[i] + Y_dest_jitter
     
     # Calculate coordinates for subarray stretched out to entire canvas
     X_zoomed = map(X, min(Xs), max(Xs), window[0], window[1])
@@ -151,7 +168,7 @@ def draw_lines():
     stroke(elevation_alpha[i],                 # Use the alpha-encoded elevation for red, 
            random_green,                       #   random values (per square) for green
            random_blue,                        #   and blue,
-           (20 + line_per_frame * 100))        #   and high opacity when drawing single lines or low opacity when drawing all at once
+           (50 + line_per_frame * 100))        #   and high opacity when drawing single lines or low opacity when drawing all at once
     strokeWeight(500 / (subwidth + subheight))
     line(X_zoomed, Y_zoomed, X_zoomed_dest, Y_zoomed_dest)
     
@@ -164,8 +181,10 @@ def set_new_subarray():
 
 def draw_all_lines(sub):
     global i
-    background(0)
-    [draw_lines() for i in range(len(sub))]
+    global keep
+    fill(0, 0, 0, 255 - keep)
+    rect(-50, -50, output_width + 200, output_height + 200)
+    [draw_line() for i in range(len(sub))]
 
 
 def draw():
@@ -177,9 +196,9 @@ def draw():
     if line_per_frame:
         if i == 0:
             restart_drawing()
-        draw_lines()
+        draw_line()
     else:
         if j == 0:
             restart_drawing()
         draw_all_lines(sub)
-        j = (j + 1) % 24
+        j = (j + 1) % 240
