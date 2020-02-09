@@ -1,9 +1,8 @@
 # User settings
 output_width = 1024
 output_height = 720
-source_img_path = "7-65-42.png"
-subarray_xlim = (205, 225)            # 0 <= xmin < xmax <= 256
-subarray_ylim = (85, 105)             # 0 <= ymin < ymax <= 256
+# source_img_path = "7-65-42.png"    # Netherlands
+source_img_path = "6-19-43.png"    # Tierra del Fuego
 line_per_frame = False
 jitter_start = 0.1
 jitter_stop = 0.2
@@ -12,10 +11,10 @@ swap_rg = True
 # Globals
 i = 0
 j = 0
-window = (0.05 * output_width,       #  (left, right, top, bottom)
-          0.95 * output_width,
-          0.05 * output_height, 
-          0.95 * output_height)
+window = (0.01 * output_width,       #  (left, right, top, bottom)
+          0.99 * output_width,
+          0.01 * output_height, 
+          0.99 * output_height)
 
 
 def initialise_img(path):
@@ -55,7 +54,7 @@ def restart_drawing():
     root = int(sqrt(len(normal.pixels)))   
     
     # Select a new random subarray
-    x_size = int(random(2, 40))
+    x_size = int(random(10, 50))
     y_size = int(0.703125 * x_size)
     subarray_xmin = int(random(0, root - 1))
     subarray_xlim = (subarray_xmin, subarray_xmin + min(256, x_size))             # 0 <= xmin < xmax <= 256
@@ -121,6 +120,7 @@ def draw_lines():
     global window
     global jitter_start
     global jitter_stop
+    global line_per_frame
     # Get absolute coordinates
     X = Xs[i] + (jitter_start * randomGaussian())
     Y = Ys[i] + (jitter_start * randomGaussian())
@@ -148,7 +148,10 @@ def draw_lines():
     #       )
     
     # Draw the lines from C to C_dest
-    stroke(elevation_alpha[i], random_green, random_blue, 20)   # Use the alpha-encoded elevation for red and random values (per square) for green and blue
+    stroke(elevation_alpha[i],                 # Use the alpha-encoded elevation for red, 
+           random_green,                       #   random values (per square) for green
+           random_blue,                        #   and blue,
+           (20 + line_per_frame * 100))        #   and high opacity when drawing single lines or low opacity when drawing all at once
     strokeWeight(500 / (subwidth + subheight))
     line(X_zoomed, Y_zoomed, X_zoomed_dest, Y_zoomed_dest)
     
@@ -161,6 +164,7 @@ def set_new_subarray():
 
 def draw_all_lines(sub):
     global i
+    background(0)
     [draw_lines() for i in range(len(sub))]
 
 
