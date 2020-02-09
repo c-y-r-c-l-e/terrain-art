@@ -4,10 +4,13 @@ output_height = 720
 source_img_path = "7-65-42.png"
 subarray_xlim = (205, 225)            # 0 <= xmin < xmax <= 256
 subarray_ylim = (85, 105)             # 0 <= ymin < ymax <= 256
-line_per_frame = True
+line_per_frame = False
+jitter_start = 0.1
+jitter_stop = 0.2
 
 # Globals
 i = 0
+j = 0
 window = (0.05 * output_width,       #  (left, right, top, bottom)
           0.95 * output_width,
           0.05 * output_height, 
@@ -26,6 +29,7 @@ def setup():
     size(output_width, output_height)
     background(0)
     initialise_img(source_img_path)
+    restart_drawing()
 
 
 def restart_drawing():
@@ -49,7 +53,7 @@ def restart_drawing():
     root = int(sqrt(len(normal.pixels)))   
     
     # Select a new random subarray
-    x_size = int(random(2, 100))
+    x_size = int(random(2, 40))
     y_size = int(0.703125 * x_size)
     subarray_xmin = int(random(0, root - 1))
     subarray_xlim = (subarray_xmin, subarray_xmin + min(256, x_size))             # 0 <= xmin < xmax <= 256
@@ -91,7 +95,7 @@ def restart_drawing():
 
 
 def draw_lines():
-    global normal
+    global normal  # TODO: sort out these globals
     global i
     global sub
     global subwidth
@@ -109,11 +113,13 @@ def draw_lines():
     global Xs_dest
     global Ys_dest
     global window
+    global jitter_start
+    global jitter_stop
     # Get absolute coordinates
-    X = Xs[i]
-    Y = Ys[i]
-    X_dest = Xs_dest[i]
-    Y_dest = Ys_dest[i]
+    X = Xs[i] + (jitter_start * randomGaussian())
+    Y = Ys[i] + (jitter_start * randomGaussian())
+    X_dest = Xs_dest[i] + (jitter_stop * randomGaussian())
+    Y_dest = Ys_dest[i] + (jitter_stop * randomGaussian())
     
     # Calculate coordinates for subarray stretched out to entire canvas
     X_zoomed = map(X, min(Xs), max(Xs), window[0], window[1])
@@ -136,7 +142,7 @@ def draw_lines():
     #       )
     
     # Draw the lines from C to C_dest
-    stroke(elevation_alpha[i], random_green, random_blue, 200)   # Use the alpha-encoded elevation for red and random values (per square) for green and blue
+    stroke(elevation_alpha[i], random_green, random_blue, 20)   # Use the alpha-encoded elevation for red and random values (per square) for green and blue
     strokeWeight(500 / (subwidth + subheight))
     line(X_zoomed, Y_zoomed, X_zoomed_dest, Y_zoomed_dest)
     
@@ -144,15 +150,26 @@ def draw_lines():
     i = (i + 1) % len(sub)
 
 
+def set_new_subarray():
+    return None
+
+def draw_all_lines(sub):
+    global i
+    [draw_lines() for i in range(len(sub))]
+
+
 def draw():
     global i
+    global j
     global sub
-    
-    if i == 0:
-        restart_drawing()
+    print("i: " + str(i) + "   j: " + str(j))
     
     if line_per_frame:
+        if i == 0:
+            restart_drawing()
         draw_lines()
     else:
-        for i in range(len(sub)):
-            draw_lines()
+        if j == 0:
+            restart_drawing()
+        draw_all_lines(sub)
+        j = (j + 1) % 24
