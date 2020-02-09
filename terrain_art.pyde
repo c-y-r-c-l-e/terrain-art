@@ -1,15 +1,16 @@
 # User settings
-output_width = 1024
-output_height = 720
+output_width = 1280
+output_height = 800
 # source_img_path = "7-65-42.png"    # Netherlands
-source_img_path = "6-19-43.png"    # Tierra del Fuego
+source_img_path = "6-19-43.png"      # Tierra del Fuego
 line_per_frame = False
 jitter_start_range = 1
 jitter_start_speed = 0.02
 jitter_end_range = 1
 jitter_end_speed = 0.02
 swap_rg = True
-keep = 220          #  0 <= x <= 255
+keep = 220                           #  0 <= x <= 255
+sub_size_range = (2, 50)             #  2 <= a < b <= 254
 
 # Globals
 i = 0
@@ -35,9 +36,34 @@ def setup():
     restart_drawing()
 
 
+def get_random_settings_within_ranges():
+    global sub_size_range
+    global x_size
+    global swap_rg
+    global jitter_start_range
+    global jitter_start_speed
+    global jitter_end_range
+    global jitter_end_speed
+    
+    x_size = int(random(sub_size_range[0], sub_size_range[1]))
+    swap_rg = (False, True)[int(round(random(1.01)))]   # PRCQJPX
+    jitter_start_range = random(10)
+    jitter_start_speed = random(0.5)
+    jitter_end_range = random(10)
+    jitter_end_speed = random(0.5)
+    
+    print("x_size:  " + str(x_size))
+    print("swap_rg:  " + str(swap_rg))
+    print("jitter_start_range:  " + str(round(jitter_start_range, 1)))
+    print("jitter_start_speed:  " + str(round(jitter_start_speed, 2)))
+    print("jitter_end_range:  " + str(round(jitter_end_range, 1)))
+    print("jitter_end_speed:  " + str(round(jitter_end_speed, 2)))
+
+
 def restart_drawing():
     global normal
     global sub
+    global sub_size_range
     global subwidth
     global subheight
     global root
@@ -53,11 +79,11 @@ def restart_drawing():
     global swap_rg
 
     background(0)
+    get_random_settings_within_ranges()
     
     root = int(sqrt(len(normal.pixels)))   
     
     # Select a new random subarray
-    x_size = int(random(10, 30))
     y_size = int(0.703125 * x_size)
     subarray_xmin = int(random(0, root - 1))
     subarray_xlim = (subarray_xmin, subarray_xmin + min(256, x_size))             # 0 <= xmin < xmax <= 256
@@ -179,19 +205,25 @@ def draw_line():
 def set_new_subarray():
     return None
 
+
 def draw_all_lines(sub):
     global i
     global keep
     fill(0, 0, 0, 255 - keep)
     rect(-50, -50, output_width + 200, output_height + 200)
     [draw_line() for i in range(len(sub))]
+    
+
+def mousePressed():
+    global j
+    j = 0
 
 
 def draw():
     global i
     global j
     global sub
-    print("i: " + str(i) + "   j: " + str(j))
+    # print("i: " + str(i) + "   j: " + str(j))
     
     if line_per_frame:
         if i == 0:
@@ -201,4 +233,4 @@ def draw():
         if j == 0:
             restart_drawing()
         draw_all_lines(sub)
-        j = (j + 1) % 240
+        j += 1
