@@ -7,6 +7,11 @@ Using "normal" tiles from https://www.nextzen.org/ (containing slope and elevati
 
 ![example image][example_A]
 
+
+Animation using [Processing](https://py.processing.org/):
+
+![example image][example_C]
+
 [example_A]: ./output_example_A.png "Example A"
 [example_B]: ./output_example_B.png "Example B"
-
+[example_C]: ./output_example_C.gif "Example C"

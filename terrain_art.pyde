@@ -7,6 +7,7 @@ subarray_ylim = (85, 105)             # 0 <= ymin < ymax <= 256
 line_per_frame = False
 jitter_start = 0.1
 jitter_stop = 0.2
+swap_rg = True
 
 # Globals
 i = 0
@@ -47,6 +48,7 @@ def restart_drawing():
     global Ys
     global Xs_dest
     global Ys_dest
+    global swap_rg
 
     background(0)
     
@@ -90,8 +92,12 @@ def restart_drawing():
     
     Xs = [sub[i] % root for i in range(len(sub))]
     Ys = [sub[i] // root for i in range(len(sub))]
-    Xs_dest = [Xs[i] + 0.0390625 * normal_red[i] * (output_width / subwidth) for i in range(len(sub))] 
-    Ys_dest = [Ys[i] + 0.0390625 * normal_green[i] * (output_height / subheight) for i in range(len(sub))]
+    if not swap_rg:
+        Xs_dest = [Xs[i] + 0.0390625 * normal_red[i] * (output_width / subwidth) for i in range(len(sub))] 
+        Ys_dest = [Ys[i] + 0.0390625 * normal_green[i] * (output_height / subheight) for i in range(len(sub))]
+    else:
+        Xs_dest = [Xs[i] + 0.0390625 * normal_green[i] * (output_width / subwidth) for i in range(len(sub))] 
+        Ys_dest = [Ys[i] + 0.0390625 * normal_red[i] * (output_height / subheight) for i in range(len(sub))]        
 
 
 def draw_lines():
