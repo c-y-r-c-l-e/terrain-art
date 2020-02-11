@@ -228,11 +228,13 @@ def keyTyped():
     global jitter_start_speed
     global jitter_end_range
     global jitter_end_speed
+    global keep
+    # global swap_rg
     if key == "x":
-        x_size -= 1
+        x_size = max(1, x_size - 1)
         restart_drawing()
     elif key == "X":
-        x_size += 1
+        x_size = min(254, x_size + 1)
         restart_drawing()
     elif key == "u":
         jitter_start_range *= 0.9
@@ -258,6 +260,15 @@ def keyTyped():
     elif key == "P":
         jitter_end_speed *= 1.1
         print(str(key) + ": jitter_end_speed =  " + str(round(jitter_end_speed, 2)))
+    elif key == "k": 
+        keep = max(0, keep - 1)
+        print(str(key) + ": keep =  " + str(keep))
+    elif key == "K":
+        keep = min(255, keep + 1)
+        print(str(key) + ": keep =  " + str(keep))
+    # elif key == "s":                                           # TODO: this will only work when calculation of sub is refactored
+    #     swap_rg = not swap_rg
+    #     print(str(key) + ": swap_rg =  " + str(swap_rg))
     else:
         print("type one of  u, i, o, p  in lowercase to decrease jitter variables or in uppercase to increase")
 
