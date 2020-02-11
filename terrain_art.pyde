@@ -4,10 +4,10 @@ output_height = 800
 # source_img_path = "7-65-42.png"    # Netherlands
 source_img_path = "6-19-43.png"      # Tierra del Fuego
 line_per_frame = False
-jitter_start_range = 1
-jitter_start_speed = 0.02
-jitter_end_range = 1
-jitter_end_speed = 0.02
+jitter_start_range = 1          # u
+jitter_start_speed = 0.02       # i
+jitter_end_range = 1            # o
+jitter_end_speed = 0.02         # p
 swap_rg = True
 keep = 220                           #  0 <= x <= 255
 sub_size_range = (2, 50)             #  2 <= a < b <= 254
@@ -19,6 +19,7 @@ window = (0.01 * output_width,       #  (left, right, top, bottom)
           0.99 * output_width,
           0.01 * output_height, 
           0.99 * output_height)
+x_size = int(random(sub_size_range[0], sub_size_range[1]))
 
 
 def initialise_img(path):
@@ -77,9 +78,9 @@ def restart_drawing():
     global Xs_dest
     global Ys_dest
     global swap_rg
+    global x_size
 
     background(0)
-    get_random_settings_within_ranges()
     
     root = int(sqrt(len(normal.pixels)))   
     
@@ -157,12 +158,13 @@ def draw_line():
     # Calculate jitter
     noiseSeed(4)
     noiseDetail(4, 0.5)
-    X_jitter = (jitter_start_range * noise(jitter_start_speed * j))
+    X_jitter = jitter_start_range * (noise(jitter_start_speed * j) - 0.5)
     noiseSeed(5)
-    Y_jitter = (jitter_start_range * noise(jitter_start_speed * j))
-    X_dest_jitter = (jitter_end_range * noise(jitter_end_speed * j))  # TODO: add vector magnitude somehow
+    X_dest_jitter = jitter_end_range * (noise(jitter_end_speed * j) - 0.5) # TODO: add vector magnitude somehow
     noiseSeed(6)
-    Y_dest_jitter = (jitter_end_range * noise(jitter_end_speed * j))
+    Y_jitter = jitter_start_range * (noise(jitter_start_speed * j) - 0.5)
+    noiseSeed(7)
+    Y_dest_jitter = jitter_end_range * (noise(jitter_end_speed * j) - 0.5)
     
     # Get absolute coordinates
     X = Xs[i] + X_jitter
@@ -206,7 +208,7 @@ def set_new_subarray():
     return None
 
 
-def draw_all_lines(sub):
+def draw_all_lines(sub):    # TODO: draw only a % of all lines per frame (and hope it goes unnoticed) to speed up 
     global i
     global keep
     fill(0, 0, 0, 255 - keep)
@@ -216,7 +218,48 @@ def draw_all_lines(sub):
 
 def mousePressed():
     global j
+    get_random_settings_within_ranges()
     j = 0
+
+
+def keyTyped():
+    global x_size
+    global jitter_start_range
+    global jitter_start_speed
+    global jitter_end_range
+    global jitter_end_speed
+    if key == "x":
+        x_size -= 1
+        restart_drawing()
+    elif key == "X":
+        x_size += 1
+        restart_drawing()
+    elif key == "u":
+        jitter_start_range *= 0.9
+        print(str(key) + ": jitter_start_range =  " + str(round(jitter_start_range, 2)))
+    elif key == "U":
+        jitter_start_range *= 1.1
+        print(str(key) + ": jitter_start_range =  " + str(round(jitter_start_range, 2)))
+    elif key == "i": 
+        jitter_start_speed *= 0.9
+        print(str(key) + ": jitter_start_speed =  " + str(round(jitter_start_speed, 2)))
+    elif key == "I":
+        jitter_start_speed *= 1.1 
+        print(str(key) + ": jitter_start_speed =  " + str(round(jitter_start_speed, 2)))
+    elif key == "o": 
+        jitter_end_range *= 0.9
+        print(str(key) + ": jitter_end_range =  " + str(round(jitter_end_range, 2)))
+    elif key == "O": 
+        jitter_end_range *= 1.1
+        print(str(key) + ": jitter_end_range =  " + str(round(jitter_end_range, 2)))
+    elif key == "p": 
+        jitter_end_speed *= 0.9
+        print(str(key) + ": jitter_end_speed =  " + str(round(jitter_end_speed, 2)))
+    elif key == "P":
+        jitter_end_speed *= 1.1
+        print(str(key) + ": jitter_end_speed =  " + str(round(jitter_end_speed, 2)))
+    else:
+        print("type one of  u, i, o, p  in lowercase to decrease jitter variables or in uppercase to increase")
 
 
 def draw():
