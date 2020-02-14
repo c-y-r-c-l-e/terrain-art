@@ -11,6 +11,7 @@ jitter_end_speed = 0.02         # p
 swap_rg = True
 keep = 220                           #  0 <= x <= 255
 sub_size_range = (2, 50)             #  2 <= a < b <= 254
+update_fraction = 0.05
 
 # Globals
 i = 0
@@ -48,10 +49,10 @@ def get_random_settings_within_ranges():
     
     x_size = int(random(sub_size_range[0], sub_size_range[1]))
     swap_rg = (False, True)[int(round(random(1.01)))]   # PRCQJPX
-    jitter_start_range = random(10)
-    jitter_start_speed = random(0.5)
-    jitter_end_range = random(10)
-    jitter_end_speed = random(0.5)
+    jitter_start_range = random(2)
+    jitter_start_speed = random(0.05)
+    jitter_end_range = random(2)
+    jitter_end_speed = random(0.05)
     
     print("x_size:  " + str(x_size))
     print("swap_rg:  " + str(swap_rg))
@@ -80,7 +81,7 @@ def restart_drawing():
     global swap_rg
     global x_size
 
-    background(0)
+    # background(0)
     
     root = int(sqrt(len(normal.pixels)))   
     
@@ -154,7 +155,7 @@ def draw_line():
     global jitter_end_range
     global jitter_end_speed
     global line_per_frame
-    
+        
     # Calculate jitter
     noiseSeed(4)
     noiseDetail(4, 0.5)
@@ -211,9 +212,13 @@ def set_new_subarray():
 def draw_all_lines(sub):    # TODO: draw only a % of all lines per frame (and hope it goes unnoticed) to speed up 
     global i
     global keep
+    global update_fraction
     fill(0, 0, 0, 255 - keep)
     rect(-50, -50, output_width + 200, output_height + 200)
-    [draw_line() for i in range(len(sub))]
+    sub_length = len(sub)
+    sub_fraction_length = int(update_fraction * sub_length)
+    fractioned_sub = [int(random(a)) for a in [sub_length] * sub_fraction_length]
+    [draw_line() for i in fractioned_sub]
     
 
 def mousePressed():
@@ -229,6 +234,7 @@ def keyTyped():
     global jitter_end_range
     global jitter_end_speed
     global keep
+    global update_fraction
     # global swap_rg
     if key == "x":
         x_size = max(1, x_size - 1)
@@ -266,6 +272,12 @@ def keyTyped():
     elif key == "K":
         keep = min(255, keep + 1)
         print(str(key) + ": keep =  " + str(keep))
+    elif key == "f": 
+        update_fraction = max(0.001, update_fraction * 0.9)
+        print(str(key) + ": update_fraction =  " + str(update_fraction))
+    elif key == "F":
+        update_fraction = min(1, update_fraction * 1.1)
+        print(str(key) + ": update_fraction =  " + str(update_fraction))
     # elif key == "s":                                           # TODO: this will only work when calculation of sub is refactored
     #     swap_rg = not swap_rg
     #     print(str(key) + ": swap_rg =  " + str(swap_rg))
@@ -279,12 +291,16 @@ def draw():
     global sub
     # print("i: " + str(i) + "   j: " + str(j))
     
-    if line_per_frame:
-        if i == 0:
-            restart_drawing()
-        draw_line()
-    else:
-        if j == 0:
-            restart_drawing()
-        draw_all_lines(sub)
-        j += 1
+    # if line_per_frame:
+    #     if i == 0:
+    #         restart_drawing()
+    #     draw_line()
+    # else:
+    #     if j == 0:
+    #         restart_drawing()
+    #     draw_all_lines(sub)
+    #     j += 1
+    if j == 0:
+        restart_drawing()
+    draw_all_lines(sub)
+    j += 1
