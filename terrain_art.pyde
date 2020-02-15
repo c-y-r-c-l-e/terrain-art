@@ -4,14 +4,14 @@ output_height = 800
 # source_img_path = "7-65-42.png"    # Netherlands
 source_img_path = "6-19-43.png"      # Tierra del Fuego
 line_per_frame = False
-jitter_start_range = 10               # u
-jitter_start_speed = 0.5           # i
-jitter_end_range = 10                 # o
-jitter_end_speed = 0.5             # p
+jitter_start_range = random(2)
+jitter_start_speed = random(0.05)
+jitter_end_range = random(2)
+jitter_end_speed = random(0.05)
 swap_rg = True
-keep = 240                            #  0 <= x <= 255
-sub_size_range = (20, 50)           #  2 <= a < b <= 254
-update_fraction = 0.5                # TODO: implement fraction/keep trade-off to set itself automatically
+# keep = 240                            #  0 <= x <= 255
+sub_size_range = (100, 150)           #  2 <= a < b <= 254
+# update_fraction = 0.99                # TODO: implement fraction/keep trade-off to set itself automatically
 
 # Globals
 rel_window = (0.01 * output_width,       #  (left, right, top, bottom)
@@ -55,18 +55,16 @@ def get_random_settings_within_ranges():
     
     print("x_size:  " + str(x_size))
     print("swap_rg:  " + str(swap_rg))
-    print("jitter_start_range:  " + str(round(jitter_start_range, 1)))
-    print("jitter_start_speed:  " + str(round(jitter_start_speed, 2)))
-    print("jitter_end_range:  " + str(round(jitter_end_range, 1)))
-    print("jitter_end_speed:  " + str(round(jitter_end_speed, 2)))
+    print("jitter:  s: " + 
+          str(round(jitter_start_range, 1)) + "___" + 
+          str(round(jitter_start_speed, 2)) + "   & e: " + 
+          str(round(jitter_end_range, 1)) + "___" + 
+          str(round(jitter_end_speed, 2)))
 
 
 def restart_drawing():
     global normal
-    global sub
     global sub_size_range
-    global subwidth
-    global subheight
     global root
     global normal_red
     global normal_green
@@ -134,7 +132,7 @@ def restart_drawing():
                   "Ys": Ys,
                   "Xs_dest": Xs_dest,
                   "Ys_dest": Ys_dest}
-    return sub_design
+    return sub_design, sub
 
 
 def draw_single_line(red, green, blue, alpha, weight, from_x, from_y, to_x, to_y):
@@ -143,8 +141,9 @@ def draw_single_line(red, green, blue, alpha, weight, from_x, from_y, to_x, to_y
     line(from_x, from_y, to_x, to_y)
 
 
-def calculate_frame_coords(sub, design, update_fraction, keep, j):
+def calculate_frame_coords(sub, design, j):
     # Get the fraction
+    update_fraction = min(1, map(mouseX, 0, output_width * 0.9, 0, 1))
     sub_length = len(sub)
     if update_fraction == 1:
         sub_fraction_length = sub_length
@@ -156,7 +155,7 @@ def calculate_frame_coords(sub, design, update_fraction, keep, j):
     # Calculate jitter
     noiseSeed(4)
     noiseDetail(1)
-    Xs_jitter =  [jitter_start_range * (noise(jitter_start_speed * (j + i)) - 0.5) for i in fractioned_sub]    # TODO: add waviness (noise as function of X and Y in some way)
+    Xs_jitter =  [jitter_start_range * (noise(jitter_start_speed * (j + i)) - 0.5) for i in fractioned_sub]
     noiseSeed(5)
     Ys_jitter = [jitter_start_range * (noise(jitter_start_speed * (j + i)) - 0.5) for i in fractioned_sub]
     noiseSeed(6)
@@ -189,21 +188,21 @@ def calculate_frame_coords(sub, design, update_fraction, keep, j):
              "Xs_zoomed_dest": Xs_zoomed_dest,
              "Ys_zoomed_dest": Ys_zoomed_dest}
     return frame
-    
 
 
-def draw_all_lines(sub, design, update_fraction, keep, j): 
+def draw_all_lines(sub, design, j): 
     # Draw an almost black rectangle over the existing lines
+    keep = map(log(mouseY), 0, log(output_height), 0, 255)
     fill(0, 0, 0, 255 - keep)
     rect(-50, -50, output_width + 200, output_height + 200)
     
     # Get the coordinates for this frame
-    frame = calculate_frame_coords(sub, design, update_fraction, keep, j)
+    frame = calculate_frame_coords(sub, design, j)
     
     # Draw the lines
     [draw_single_line(red = design["elevations_to_reds"][e[1]],     # Use the elevation data for red, 
-                      green = design["sub_random_green"],        #   random values (per drawing) for green
-                      blue = design["sub_random_blue"],          #   and blue
+                      green = design["sub_random_green"],           #   random values (per drawing) for green
+                      blue = design["sub_random_blue"],             #   and blue
                       alpha = design["sub_alpha"],
                       weight = design["sub_lineweight"],
                       from_x = frame["Xs_zoomed"][e[0]],
@@ -216,72 +215,14 @@ def mousePressed():
     global j
     get_random_settings_within_ranges()
     j = 0
-
-
-def keyTyped():
-    global x_size
-    global jitter_start_range
-    global jitter_start_speed
-    global jitter_end_range
-    global jitter_end_speed
-    global keep
-    global update_fraction
-    # global swap_rg
-    if key == "x":
-        x_size = max(1, x_size - 1)
-        restart_drawing()
-    elif key == "X":
-        x_size = min(254, x_size + 1)
-        restart_drawing()
-    # elif key == "u":                                                 # TODO: repair these controls
-    #     jitter_start_range *= 0.9
-    #     print(str(key) + ": jitter_start_range =  " + str(round(jitter_start_range, 2)))
-    # elif key == "U":
-    #     jitter_start_range *= 1.1
-    #     print(str(key) + ": jitter_start_range =  " + str(round(jitter_start_range, 2)))
-    # elif key == "i": 
-    #     jitter_start_speed *= 0.9
-    #     print(str(key) + ": jitter_start_speed =  " + str(round(jitter_start_speed, 2)))
-    # elif key == "I":
-    #     jitter_start_speed *= 1.1 
-    #     print(str(key) + ": jitter_start_speed =  " + str(round(jitter_start_speed, 2)))
-    # elif key == "o": 
-    #     jitter_end_range *= 0.9
-    #     print(str(key) + ": jitter_end_range =  " + str(round(jitter_end_range, 2)))
-    # elif key == "O": 
-    #     jitter_end_range *= 1.1
-    #     print(str(key) + ": jitter_end_range =  " + str(round(jitter_end_range, 2)))
-    # elif key == "p": 
-    #     jitter_end_speed *= 0.9
-    #     print(str(key) + ": jitter_end_speed =  " + str(round(jitter_end_speed, 2)))
-    # elif key == "P":
-    #     jitter_end_speed *= 1.1
-    #     print(str(key) + ": jitter_end_speed =  " + str(round(jitter_end_speed, 2)))
-    elif key == "k": 
-        keep = max(0, keep - 1)
-        print(str(key) + ": keep =  " + str(keep))
-    elif key == "K":
-        keep = min(255, keep + 1)
-        print(str(key) + ": keep =  " + str(keep))
-    elif key == "f": 
-        update_fraction = max(0.001, update_fraction * 0.9)
-        print(str(key) + ": update_fraction =  " + str(round(update_fraction, 2)))
-    elif key == "F":
-        update_fraction = min(1, update_fraction * 1.1)
-        print(str(key) + ": update_fraction =  " + str(round(update_fraction, 2)))
-    # elif key == "s":                                           # TODO: this will only work when calculation of sub is refactored
-    #     swap_rg = not swap_rg
-    #     print(str(key) + ": swap_rg =  " + str(swap_rg))
-    else:
-        print("type one of  u, i, o, p  in lowercase to decrease jitter variables or in uppercase to increase")
-
+    
 
 def draw():
     global j
     global sub
     global design
-
+    
     if j == 0:
-        design = restart_drawing()
-    draw_all_lines(sub, design, update_fraction, keep, j)
+        design, sub = restart_drawing()
+    draw_all_lines(sub, design, j)
     j += 1
