@@ -4,14 +4,14 @@ output_height = 800
 # source_img_path = "7-65-42.png"    # Netherlands
 source_img_path = "6-19-43.png"      # Tierra del Fuego
 line_per_frame = False
-jitter_start_range = 1               # u
-jitter_start_speed = 0.02            # i
-jitter_end_range = 1                 # o
-jitter_end_speed = 0.02              # p
+jitter_start_range = 10               # u
+jitter_start_speed = 0.5           # i
+jitter_end_range = 10                 # o
+jitter_end_speed = 0.5             # p
 swap_rg = True
-keep = 220                              #  0 <= x <= 255
-sub_size_range = (100, 200)             #  2 <= a < b <= 254
-update_fraction = 0.05
+keep = 240                            #  0 <= x <= 255
+sub_size_range = (20, 50)           #  2 <= a < b <= 254
+update_fraction = 0.5                # TODO: implement fraction/keep trade-off to set itself automatically
 
 # Globals
 rel_window = (0.01 * output_width,       #  (left, right, top, bottom)
@@ -123,43 +123,17 @@ def restart_drawing():
     else:
         Xs_dest = [Xs[i] + 0.0390625 * normal_green[i] * (output_width / subwidth) for i in sub_len_range] 
         Ys_dest = [Ys[i] + 0.0390625 * normal_red[i] * (output_height / subheight) for i in sub_len_range]       
-    
-    # Calculate jitter
-    noiseSeed(4)
-    noiseDetail(1)
-    Xs_jitter =  [jitter_start_range * (noise(jitter_start_speed * (j + i)) - 0.5) for i in sub_len_range]
-    noiseSeed(5)
-    Ys_jitter = [jitter_start_range * (noise(jitter_start_speed * (j + i)) - 0.5) for i in sub_len_range]
-    noiseSeed(6)
-    Xs_dest_jitter = [jitter_end_range * (noise(jitter_end_speed * (j + i)) - 0.5) for i in sub_len_range]    # TODO: add vector magnitude somehow
-    noiseSeed(7)
-    Ys_dest_jitter = [jitter_end_range * (noise(jitter_end_speed * (j + i)) - 0.5) for i in sub_len_range]
-    
-    # Get absolute coordinates
-    Xs_jittered = [Xs[i] + Xs_jitter[i] for i in sub_len_range]
-    Ys_jittered = [Ys[i] + Ys_jitter[i] for i in sub_len_range]
-    Xs_dest_jittered = [Xs_dest[i] + Xs_dest_jitter[i] for i in sub_len_range]
-    Ys_dest_jittered = [Ys_dest[i] + Ys_dest_jitter[i] for i in sub_len_range]
-    
-    # Get absolute window
-    abs_window = (min(Xs), max(Xs), min(Ys), max(Ys))       #  (left, right, top, bottom)
-    
-    # Stretch coordinates out to fill the relative window
-    Xs_zoomed = [map(Xs_jittered[i], abs_window[0], abs_window[1], rel_window[0], rel_window[1]) for i in sub_len_range]
-    Ys_zoomed = [map(Ys_jittered[i], abs_window[2], abs_window[3], rel_window[2], rel_window[3]) for i in sub_len_range]
-    Xs_zoomed_dest = [map(Xs_dest_jittered[i], abs_window[0], abs_window[1], rel_window[0], rel_window[1]) for i in sub_len_range]
-    Ys_zoomed_dest = [map(Ys_dest_jittered[i], abs_window[2], abs_window[3], rel_window[2], rel_window[3]) for i in sub_len_range]
-    
+
     # Collect all the artistic properties in a dict
     sub_design = {"elevations_to_reds": elevations_to_reds, 
                   "sub_random_green": sub_random_green, 
                   "sub_random_blue": sub_random_blue, 
                   "sub_alpha": sub_alpha, 
                   "sub_lineweight": sub_lineweight, 
-                  "Xs_zoomed": Xs_zoomed,
-                  "Ys_zoomed": Ys_zoomed,
-                  "Xs_zoomed_dest": Xs_zoomed_dest,
-                  "Ys_zoomed_dest": Ys_zoomed_dest}
+                  "Xs": Xs,
+                  "Ys": Ys,
+                  "Xs_dest": Xs_dest,
+                  "Ys_dest": Ys_dest}
     return sub_design
 
 
@@ -169,28 +143,73 @@ def draw_single_line(red, green, blue, alpha, weight, from_x, from_y, to_x, to_y
     line(from_x, from_y, to_x, to_y)
 
 
-def draw_all_lines(sub, design, update_fraction, keep): 
+def calculate_frame_coords(sub, design, update_fraction, keep, j):
+    # Get the fraction
+    sub_length = len(sub)
+    if update_fraction == 1:
+        sub_fraction_length = sub_length
+        fractioned_sub = range(sub_length)
+    else:
+        sub_fraction_length = int(update_fraction * sub_length)
+        fractioned_sub = [int(random(a)) for a in [sub_length] * sub_fraction_length]
+    
+    # Calculate jitter
+    noiseSeed(4)
+    noiseDetail(1)
+    Xs_jitter =  [jitter_start_range * (noise(jitter_start_speed * (j + i)) - 0.5) for i in fractioned_sub]    # TODO: add waviness (noise as function of X and Y in some way)
+    noiseSeed(5)
+    Ys_jitter = [jitter_start_range * (noise(jitter_start_speed * (j + i)) - 0.5) for i in fractioned_sub]
+    noiseSeed(6)
+    Xs_dest_jitter = [jitter_end_range * (noise(jitter_end_speed * (j + i)) - 0.5) for i in fractioned_sub]    # TODO: add vector magnitude somehow
+    noiseSeed(7)
+    Ys_dest_jitter = [jitter_end_range * (noise(jitter_end_speed * (j + i)) - 0.5) for i in fractioned_sub]
+    
+    # Add noise to absolute coordinates
+    Xs_jittered = [design['Xs'][e[1]] + Xs_jitter[e[0]] for e in enumerate(fractioned_sub)]       # e[1] == i    e[0] : range of length of fractioned_sub
+    Ys_jittered = [design['Ys'][e[1]] + Ys_jitter[e[0]] for e in enumerate(fractioned_sub)]
+    Xs_dest_jittered = [design['Xs_dest'][e[1]] + Xs_dest_jitter[e[0]] for e in enumerate(fractioned_sub)]
+    Ys_dest_jittered = [design['Ys_dest'][e[1]] + Ys_dest_jitter[e[0]] for e in enumerate(fractioned_sub)]
+    
+    # Get absolute window
+    abs_window = (min(design['Xs']),       # left
+                  max(design['Xs']),       # right
+                  min(design['Ys']),       # top
+                  max(design['Ys']))       # bottom
+    
+    # Stretch noisy coordinates out to fill the relative window
+    Xs_zoomed = [map(Xs_jittered[h], abs_window[0], abs_window[1], rel_window[0], rel_window[1]) for h in range(sub_fraction_length)]     # h == e[0]
+    Ys_zoomed = [map(Ys_jittered[h], abs_window[2], abs_window[3], rel_window[2], rel_window[3]) for h in range(sub_fraction_length)]
+    Xs_zoomed_dest = [map(Xs_dest_jittered[h], abs_window[0], abs_window[1], rel_window[0], rel_window[1]) for h in range(sub_fraction_length)]
+    Ys_zoomed_dest = [map(Ys_dest_jittered[h], abs_window[2], abs_window[3], rel_window[2], rel_window[3]) for h in range(sub_fraction_length)]
+    
+    # Collect all the coordinates in a dict
+    frame = {"is": fractioned_sub,
+             "Xs_zoomed": Xs_zoomed,
+             "Ys_zoomed": Ys_zoomed,
+             "Xs_zoomed_dest": Xs_zoomed_dest,
+             "Ys_zoomed_dest": Ys_zoomed_dest}
+    return frame
+    
+
+
+def draw_all_lines(sub, design, update_fraction, keep, j): 
     # Draw an almost black rectangle over the existing lines
     fill(0, 0, 0, 255 - keep)
     rect(-50, -50, output_width + 200, output_height + 200)
     
-    # Get the fraction 
-    if update_fraction == 1:
-        fractioned_sub = sub
-    sub_length = len(sub)
-    sub_fraction_length = int(update_fraction * sub_length)
-    fractioned_sub = [int(random(a)) for a in [sub_length] * sub_fraction_length]
+    # Get the coordinates for this frame
+    frame = calculate_frame_coords(sub, design, update_fraction, keep, j)
     
     # Draw the lines
-    [draw_single_line(red = design["elevations_to_reds"][i],     # Use the elevation data for red, 
-                          green = design["sub_random_green"],        #   random values (per drawing) for green
-                          blue = design["sub_random_blue"],          #   and blue
-                          alpha = design["sub_alpha"],
-                          weight = design["sub_lineweight"],
-                          from_x = design["Xs_zoomed"][i],
-                          from_y = design["Ys_zoomed"][i],
-                          to_x = design["Xs_zoomed_dest"][i],
-                          to_y = design["Ys_zoomed_dest"][i]) for i in fractioned_sub]
+    [draw_single_line(red = design["elevations_to_reds"][e[1]],     # Use the elevation data for red, 
+                      green = design["sub_random_green"],        #   random values (per drawing) for green
+                      blue = design["sub_random_blue"],          #   and blue
+                      alpha = design["sub_alpha"],
+                      weight = design["sub_lineweight"],
+                      from_x = frame["Xs_zoomed"][e[0]],
+                      from_y = frame["Ys_zoomed"][e[0]],
+                      to_x = frame["Xs_zoomed_dest"][e[0]],
+                      to_y = frame["Ys_zoomed_dest"][e[0]]) for e in enumerate(frame["is"])]
     
 
 def mousePressed():
@@ -246,10 +265,10 @@ def keyTyped():
         print(str(key) + ": keep =  " + str(keep))
     elif key == "f": 
         update_fraction = max(0.001, update_fraction * 0.9)
-        print(str(key) + ": update_fraction =  " + str(update_fraction))
+        print(str(key) + ": update_fraction =  " + str(round(update_fraction, 2)))
     elif key == "F":
         update_fraction = min(1, update_fraction * 1.1)
-        print(str(key) + ": update_fraction =  " + str(update_fraction))
+        print(str(key) + ": update_fraction =  " + str(round(update_fraction, 2)))
     # elif key == "s":                                           # TODO: this will only work when calculation of sub is refactored
     #     swap_rg = not swap_rg
     #     print(str(key) + ": swap_rg =  " + str(swap_rg))
@@ -264,5 +283,5 @@ def draw():
 
     if j == 0:
         design = restart_drawing()
-    draw_all_lines(sub, design, update_fraction, keep)
+    draw_all_lines(sub, design, update_fraction, keep, j)
     j += 1
