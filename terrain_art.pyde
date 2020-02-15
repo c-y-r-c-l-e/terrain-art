@@ -4,22 +4,20 @@ output_height = 800
 # source_img_path = "7-65-42.png"    # Netherlands
 source_img_path = "6-19-43.png"      # Tierra del Fuego
 line_per_frame = False
-jitter_start_range = 1          # u
-jitter_start_speed = 0.02       # i
-jitter_end_range = 1            # o
-jitter_end_speed = 0.02         # p
+jitter_start_range = 1               # u
+jitter_start_speed = 0.02            # i
+jitter_end_range = 1                 # o
+jitter_end_speed = 0.02              # p
 swap_rg = True
-keep = 220                           #  0 <= x <= 255
-sub_size_range = (2, 50)             #  2 <= a < b <= 254
+keep = 220                              #  0 <= x <= 255
+sub_size_range = (100, 200)             #  2 <= a < b <= 254
 update_fraction = 0.05
 
 # Globals
-i = 0
-j = 0
-window = (0.01 * output_width,       #  (left, right, top, bottom)
-          0.99 * output_width,
-          0.01 * output_height, 
-          0.99 * output_height)
+rel_window = (0.01 * output_width,       #  (left, right, top, bottom)
+              0.99 * output_width,
+              0.01 * output_height, 
+              0.99 * output_height)
 x_size = int(random(sub_size_range[0], sub_size_range[1]))
 
 
@@ -32,10 +30,11 @@ def initialise_img(path):
 
 def setup():
     global normal
+    global j
     size(output_width, output_height)
     background(0)
     initialise_img(source_img_path)
-    restart_drawing()
+    j = 0
 
 
 def get_random_settings_within_ranges():
@@ -69,19 +68,10 @@ def restart_drawing():
     global subwidth
     global subheight
     global root
-    global elevation_alpha
     global normal_red
     global normal_green
-    global random_green
-    global random_blue
-    global Xs
-    global Ys
-    global Xs_dest
-    global Ys_dest
     global swap_rg
     global x_size
-
-    # background(0)
     
     root = int(sqrt(len(normal.pixels)))   
     
@@ -99,8 +89,8 @@ def restart_drawing():
           str(subarray_xlim[0]) + ", " + 
           str(subarray_xlim[1]) + ", " + 
           str(subarray_ylim[0]) + ", " + 
-          str(subarray_ylim[1]))
-    print("sub size:  " + str(subwidth) + " x " + str(subheight))
+          str(subarray_ylim[1]) + 
+          "     sub size:  " + str(subwidth) + " x " + str(subheight))
  
     # Keep only those values from the pixel list that are within the bounds of the subarray
     sub = [p for p in range(len(normal.pixels)) if 
@@ -110,115 +100,97 @@ def restart_drawing():
            (p // root) <= subarray_ylim[1]]
     
     # Extract values from the png-encoded terrain data
-    elevation_alpha = [(normal.pixels[sub[i]] >> 24) & 0xFF for i in range(len(sub))]
-    normal_red = [((normal.pixels[sub[i]] >> 16) & 0xFF) - 128 for i in range(len(sub))]
-    normal_green = [((normal.pixels[sub[i]] >> 8) & 0xFF) - 128 for i in range(len(sub))]
-    normal_blue = [(normal.pixels[sub[i]] & 0xFF) - 128 for i in range(len(sub))]
+    sub_len_range = range(len(sub))
+    elevations_to_reds = [(normal.pixels[sub[i]] >> 24) & 0xFF for i in sub_len_range]
+    normal_red = [((normal.pixels[sub[i]] >> 16) & 0xFF) - 128 for i in sub_len_range]
+    normal_green = [((normal.pixels[sub[i]] >> 8) & 0xFF) - 128 for i in sub_len_range]
+    normal_blue = [(normal.pixels[sub[i]] & 0xFF) - 128 for i in sub_len_range]
     
     # Calculate colours
-    elevation_alpha = [map(alpha, min(elevation_alpha), max(elevation_alpha), 0, 255) for alpha in elevation_alpha]   # Stretch up the reds
-    random_green = random(0, 255)
-    random_blue = random(0, 255)
+    elevations_to_reds = [map(alpha, min(elevations_to_reds), max(elevations_to_reds), 0, 255) for alpha in elevations_to_reds]   # Stretch up the reds
+    sub_random_green = random(0, 255)
+    sub_random_blue = random(0, 255)
     
-    Xs = [sub[i] % root for i in range(len(sub))]
-    Ys = [sub[i] // root for i in range(len(sub))]
+    sub_lineweight = 500 / (subwidth + subheight)
+    sub_alpha = 50                                      # TODO: animate this
+    
+    # Get fixed coordinates
+    Xs = [sub[i] % root for i in sub_len_range]
+    Ys = [sub[i] // root for i in sub_len_range]
     if not swap_rg:
-        Xs_dest = [Xs[i] + 0.0390625 * normal_red[i] * (output_width / subwidth) for i in range(len(sub))] 
-        Ys_dest = [Ys[i] + 0.0390625 * normal_green[i] * (output_height / subheight) for i in range(len(sub))]
+        Xs_dest = [Xs[i] + 0.0390625 * normal_red[i] * (output_width / subwidth) for i in sub_len_range] 
+        Ys_dest = [Ys[i] + 0.0390625 * normal_green[i] * (output_height / subheight) for i in sub_len_range]
     else:
-        Xs_dest = [Xs[i] + 0.0390625 * normal_green[i] * (output_width / subwidth) for i in range(len(sub))] 
-        Ys_dest = [Ys[i] + 0.0390625 * normal_red[i] * (output_height / subheight) for i in range(len(sub))]        
-
-
-def draw_line():
-    global normal  # TODO: sort out these globals
-    global i
-    global j
-    global sub
-    global subwidth
-    global subheight
-    global root
-    global subarray_xlim
-    global subarray_ylim
-    global elevation_alpha
-    global normal_red
-    global normal_green
-    global random_green
-    global random_blue
-    global Xs
-    global Ys
-    global Xs_dest
-    global Ys_dest
-    global window
-    global jitter_start_range
-    global jitter_start_speed
-    global jitter_end_range
-    global jitter_end_speed
-    global line_per_frame
-        
+        Xs_dest = [Xs[i] + 0.0390625 * normal_green[i] * (output_width / subwidth) for i in sub_len_range] 
+        Ys_dest = [Ys[i] + 0.0390625 * normal_red[i] * (output_height / subheight) for i in sub_len_range]       
+    
     # Calculate jitter
     noiseSeed(4)
-    noiseDetail(4, 0.5)
-    X_jitter = jitter_start_range * (noise(jitter_start_speed * j) - 0.5)
+    noiseDetail(1)
+    Xs_jitter =  [jitter_start_range * (noise(jitter_start_speed * (j + i)) - 0.5) for i in sub_len_range]
     noiseSeed(5)
-    X_dest_jitter = jitter_end_range * (noise(jitter_end_speed * j) - 0.5) # TODO: add vector magnitude somehow
+    Ys_jitter = [jitter_start_range * (noise(jitter_start_speed * (j + i)) - 0.5) for i in sub_len_range]
     noiseSeed(6)
-    Y_jitter = jitter_start_range * (noise(jitter_start_speed * j) - 0.5)
+    Xs_dest_jitter = [jitter_end_range * (noise(jitter_end_speed * (j + i)) - 0.5) for i in sub_len_range]    # TODO: add vector magnitude somehow
     noiseSeed(7)
-    Y_dest_jitter = jitter_end_range * (noise(jitter_end_speed * j) - 0.5)
+    Ys_dest_jitter = [jitter_end_range * (noise(jitter_end_speed * (j + i)) - 0.5) for i in sub_len_range]
     
     # Get absolute coordinates
-    X = Xs[i] + X_jitter
-    Y = Ys[i] + Y_jitter
-    X_dest = Xs_dest[i] + X_dest_jitter
-    Y_dest = Ys_dest[i] + Y_dest_jitter
+    Xs_jittered = [Xs[i] + Xs_jitter[i] for i in sub_len_range]
+    Ys_jittered = [Ys[i] + Ys_jitter[i] for i in sub_len_range]
+    Xs_dest_jittered = [Xs_dest[i] + Xs_dest_jitter[i] for i in sub_len_range]
+    Ys_dest_jittered = [Ys_dest[i] + Ys_dest_jitter[i] for i in sub_len_range]
     
-    # Calculate coordinates for subarray stretched out to entire canvas
-    X_zoomed = map(X, min(Xs), max(Xs), window[0], window[1])
-    Y_zoomed = map(Y, min(Ys), max(Ys), window[2], window[3])
-    X_zoomed_dest = map(X_dest, min(Xs), max(Xs), window[0], window[1])
-    Y_zoomed_dest = map(Y_dest, min(Ys), max(Ys), window[2], window[3])
+    # Get absolute window
+    abs_window = (min(Xs), max(Xs), min(Ys), max(Ys))       #  (left, right, top, bottom)
     
-    # print("   i: " + str(i) + 
-    #       "   sub[i]: " + str(sub[i]) + 
-    #       "   len(sub): " + str(len(sub)) +
-    #       "   X: " + str(X) + 
-    #       "   Y: " + str(Y) + 
-    #       "   X_dest: " + str(int(X_dest)) + 
-    #       "   Y_dest: " + str(int(Y_dest)) + 
-    #       "   X_zoomed: " + str(round(X_zoomed, 1)) + 
-    #       "   Y_zoomed: " + str(round(Y_zoomed, 1)) + 
-    #       "   X_zoomed_dest: " + str(round(X_zoomed_dest, 1)) + 
-    #       "   Y_zoomed_dest: " + str(round(Y_zoomed_dest, 1)) + 
-    #       "   elevation_alpha[i]: " + str(elevation_alpha[i])
-    #       )
+    # Stretch coordinates out to fill the relative window
+    Xs_zoomed = [map(Xs_jittered[i], abs_window[0], abs_window[1], rel_window[0], rel_window[1]) for i in sub_len_range]
+    Ys_zoomed = [map(Ys_jittered[i], abs_window[2], abs_window[3], rel_window[2], rel_window[3]) for i in sub_len_range]
+    Xs_zoomed_dest = [map(Xs_dest_jittered[i], abs_window[0], abs_window[1], rel_window[0], rel_window[1]) for i in sub_len_range]
+    Ys_zoomed_dest = [map(Ys_dest_jittered[i], abs_window[2], abs_window[3], rel_window[2], rel_window[3]) for i in sub_len_range]
     
-    # Draw the lines from C to C_dest
-    stroke(elevation_alpha[i],                 # Use the alpha-encoded elevation for red, 
-           random_green,                       #   random values (per square) for green
-           random_blue,                        #   and blue,
-           (50 + line_per_frame * 100))        #   and high opacity when drawing single lines or low opacity when drawing all at once
-    strokeWeight(500 / (subwidth + subheight))
-    line(X_zoomed, Y_zoomed, X_zoomed_dest, Y_zoomed_dest)
-    
-    # Update counters
-    i = (i + 1) % len(sub)
+    # Collect all the artistic properties in a dict
+    sub_design = {"elevations_to_reds": elevations_to_reds, 
+                  "sub_random_green": sub_random_green, 
+                  "sub_random_blue": sub_random_blue, 
+                  "sub_alpha": sub_alpha, 
+                  "sub_lineweight": sub_lineweight, 
+                  "Xs_zoomed": Xs_zoomed,
+                  "Ys_zoomed": Ys_zoomed,
+                  "Xs_zoomed_dest": Xs_zoomed_dest,
+                  "Ys_zoomed_dest": Ys_zoomed_dest}
+    return sub_design
 
 
-def set_new_subarray():
-    return None
+def draw_single_line(red, green, blue, alpha, weight, from_x, from_y, to_x, to_y):
+    stroke(red, green, blue, alpha)
+    strokeWeight(weight)
+    line(from_x, from_y, to_x, to_y)
 
 
-def draw_all_lines(sub):    # TODO: draw only a % of all lines per frame (and hope it goes unnoticed) to speed up 
-    global i
-    global keep
-    global update_fraction
+def draw_all_lines(sub, design, update_fraction, keep): 
+    # Draw an almost black rectangle over the existing lines
     fill(0, 0, 0, 255 - keep)
     rect(-50, -50, output_width + 200, output_height + 200)
+    
+    # Get the fraction 
+    if update_fraction == 1:
+        fractioned_sub = sub
     sub_length = len(sub)
     sub_fraction_length = int(update_fraction * sub_length)
     fractioned_sub = [int(random(a)) for a in [sub_length] * sub_fraction_length]
-    [draw_line() for i in fractioned_sub]
+    
+    # Draw the lines
+    [draw_single_line(red = design["elevations_to_reds"][i],     # Use the elevation data for red, 
+                          green = design["sub_random_green"],        #   random values (per drawing) for green
+                          blue = design["sub_random_blue"],          #   and blue
+                          alpha = design["sub_alpha"],
+                          weight = design["sub_lineweight"],
+                          from_x = design["Xs_zoomed"][i],
+                          from_y = design["Ys_zoomed"][i],
+                          to_x = design["Xs_zoomed_dest"][i],
+                          to_y = design["Ys_zoomed_dest"][i]) for i in fractioned_sub]
     
 
 def mousePressed():
@@ -242,30 +214,30 @@ def keyTyped():
     elif key == "X":
         x_size = min(254, x_size + 1)
         restart_drawing()
-    elif key == "u":
-        jitter_start_range *= 0.9
-        print(str(key) + ": jitter_start_range =  " + str(round(jitter_start_range, 2)))
-    elif key == "U":
-        jitter_start_range *= 1.1
-        print(str(key) + ": jitter_start_range =  " + str(round(jitter_start_range, 2)))
-    elif key == "i": 
-        jitter_start_speed *= 0.9
-        print(str(key) + ": jitter_start_speed =  " + str(round(jitter_start_speed, 2)))
-    elif key == "I":
-        jitter_start_speed *= 1.1 
-        print(str(key) + ": jitter_start_speed =  " + str(round(jitter_start_speed, 2)))
-    elif key == "o": 
-        jitter_end_range *= 0.9
-        print(str(key) + ": jitter_end_range =  " + str(round(jitter_end_range, 2)))
-    elif key == "O": 
-        jitter_end_range *= 1.1
-        print(str(key) + ": jitter_end_range =  " + str(round(jitter_end_range, 2)))
-    elif key == "p": 
-        jitter_end_speed *= 0.9
-        print(str(key) + ": jitter_end_speed =  " + str(round(jitter_end_speed, 2)))
-    elif key == "P":
-        jitter_end_speed *= 1.1
-        print(str(key) + ": jitter_end_speed =  " + str(round(jitter_end_speed, 2)))
+    # elif key == "u":                                                 # TODO: repair these controls
+    #     jitter_start_range *= 0.9
+    #     print(str(key) + ": jitter_start_range =  " + str(round(jitter_start_range, 2)))
+    # elif key == "U":
+    #     jitter_start_range *= 1.1
+    #     print(str(key) + ": jitter_start_range =  " + str(round(jitter_start_range, 2)))
+    # elif key == "i": 
+    #     jitter_start_speed *= 0.9
+    #     print(str(key) + ": jitter_start_speed =  " + str(round(jitter_start_speed, 2)))
+    # elif key == "I":
+    #     jitter_start_speed *= 1.1 
+    #     print(str(key) + ": jitter_start_speed =  " + str(round(jitter_start_speed, 2)))
+    # elif key == "o": 
+    #     jitter_end_range *= 0.9
+    #     print(str(key) + ": jitter_end_range =  " + str(round(jitter_end_range, 2)))
+    # elif key == "O": 
+    #     jitter_end_range *= 1.1
+    #     print(str(key) + ": jitter_end_range =  " + str(round(jitter_end_range, 2)))
+    # elif key == "p": 
+    #     jitter_end_speed *= 0.9
+    #     print(str(key) + ": jitter_end_speed =  " + str(round(jitter_end_speed, 2)))
+    # elif key == "P":
+    #     jitter_end_speed *= 1.1
+    #     print(str(key) + ": jitter_end_speed =  " + str(round(jitter_end_speed, 2)))
     elif key == "k": 
         keep = max(0, keep - 1)
         print(str(key) + ": keep =  " + str(keep))
@@ -286,21 +258,11 @@ def keyTyped():
 
 
 def draw():
-    global i
     global j
     global sub
-    # print("i: " + str(i) + "   j: " + str(j))
-    
-    # if line_per_frame:
-    #     if i == 0:
-    #         restart_drawing()
-    #     draw_line()
-    # else:
-    #     if j == 0:
-    #         restart_drawing()
-    #     draw_all_lines(sub)
-    #     j += 1
+    global design
+
     if j == 0:
-        restart_drawing()
-    draw_all_lines(sub)
+        design = restart_drawing()
+    draw_all_lines(sub, design, update_fraction, keep)
     j += 1
