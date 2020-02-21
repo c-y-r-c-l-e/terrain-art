@@ -1,16 +1,20 @@
+from p5 import *
+import numpy as np
+from PIL import Image
+
 # User settings
 output_width = 1280
 output_height = 800
 # source_img_path = "7-65-42.png"    # Netherlands
 source_img_path = "6-19-43.png"      # Tierra del Fuego
 line_per_frame = False
-jitter_start_range = random(2)
-jitter_start_speed = random(0.05)
-jitter_end_range = random(2)
-jitter_end_speed = random(0.05)
-swap_rg = True
+jitter_start_range = random_uniform(2)
+jitter_start_speed = random_uniform(0.05)
+jitter_end_range = random_uniform(2)
+jitter_end_speed = random_uniform(0.05)
+swap_rg = False
 # keep = 240                            #  0 <= x <= 255
-sub_size_range = (100, 150)           #  2 <= a < b <= 254
+sub_size_range = (100, 101)           #  2 <= a < b <= 254
 # update_fraction = 0.99                # TODO: implement fraction/keep trade-off to set itself automatically
 
 # Globals
@@ -18,23 +22,49 @@ rel_window = (0.01 * output_width,       #  (left, right, top, bottom)
               0.99 * output_width,
               0.01 * output_height, 
               0.99 * output_height)
-x_size = int(random(sub_size_range[0], sub_size_range[1]))
+x_size = int(random_uniform(sub_size_range[0], sub_size_range[1]))
 
 
 def initialise_img(path):
-    global normal
-    normal = loadImage(path)
-    image(normal, output_height, output_width)  # Displaying the img where we don't see it
-    loadPixels()                                #   as loadPixels() won't work without displaying first
+    img = Image.open(path)
+    array = np.array(img)
+    return array
     
 
 def setup():
     global normal
     global j
     size(output_width, output_height)
+    color_mode("RGB")
     background(0)
-    initialise_img(source_img_path)
+    normal = initialise_img(source_img_path)
     j = 0
+
+
+def generate_perlin_noise_2d(shape, res):    # From https://github.com/pvigier/perlin-numpy (it's not a pkg yet)
+    def f(t):
+        return 6 * t ** 5 - 15 * t ** 4 + 10 * t ** 3
+
+    delta = (res[0] / shape[0], res[1] / shape[1])
+    d = (shape[0] // res[0], shape[1] // res[1])
+    grid = np.mgrid[0:res[0]:delta[0], 0:res[1]:delta[1]].transpose(1, 2, 0) % 1
+    # Gradients
+    angles = 2 * np.pi * np.random.rand(res[0] + 1, res[1] + 1)
+    gradients = np.dstack((np.cos(angles), np.sin(angles)))
+    g00 = gradients[0:-1, 0:-1].repeat(d[0], 0).repeat(d[1], 1)
+    g10 = gradients[1:, 0:-1].repeat(d[0], 0).repeat(d[1], 1)
+    g01 = gradients[0:-1, 1:].repeat(d[0], 0).repeat(d[1], 1)
+    g11 = gradients[1:, 1:].repeat(d[0], 0).repeat(d[1], 1)
+    # Ramps
+    n00 = np.sum(np.dstack((grid[:, :, 0], grid[:, :, 1])) * g00, 2)
+    n10 = np.sum(np.dstack((grid[:, :, 0] - 1, grid[:, :, 1])) * g10, 2)
+    n01 = np.sum(np.dstack((grid[:, :, 0], grid[:, :, 1] - 1)) * g01, 2)
+    n11 = np.sum(np.dstack((grid[:, :, 0] - 1, grid[:, :, 1] - 1)) * g11, 2)
+    # Interpolation
+    t = f(grid)
+    n0 = n00 * (1 - t[:, :, 0]) + t[:, :, 0] * n10
+    n1 = n01 * (1 - t[:, :, 0]) + t[:, :, 0] * n11
+    return np.sqrt(2) * ((1 - t[:, :, 1]) * n0 + t[:, :, 1] * n1)
 
 
 def get_random_settings_within_ranges():
@@ -46,12 +76,12 @@ def get_random_settings_within_ranges():
     global jitter_end_range
     global jitter_end_speed
     
-    x_size = int(random(sub_size_range[0], sub_size_range[1]))
-    swap_rg = (False, True)[int(round(random(1.01)))]   # PRCQJPX
-    jitter_start_range = random(2)
-    jitter_start_speed = random(0.05)
-    jitter_end_range = random(2)
-    jitter_end_speed = random(0.05)
+    x_size = int(random_uniform(sub_size_range[0], sub_size_range[1]))
+    swap_rg = (False, True)[int(round(random_uniform(1.01)))]   # PRCQJPX
+    jitter_start_range = random_uniform(2)
+    jitter_start_speed = random_uniform(0.05)
+    jitter_end_range = random_uniform(2)
+    jitter_end_speed = random_uniform(0.05)
     
     print("x_size:  " + str(x_size))
     print("swap_rg:  " + str(swap_rg))
@@ -65,62 +95,44 @@ def get_random_settings_within_ranges():
 def restart_drawing():
     global normal
     global sub_size_range
-    global root
     global normal_red
     global normal_green
     global swap_rg
     global x_size
     
-    root = int(sqrt(len(normal.pixels)))   
-    
     # Select a new random subarray
     y_size = int(0.703125 * x_size)
-    subarray_xmin = int(random(0, root - 1))
-    subarray_xlim = (subarray_xmin, subarray_xmin + min(256, x_size))             # 0 <= xmin < xmax <= 256
-    subarray_ymin = int(random(0, root - 1))
-    subarray_ylim = (subarray_ymin, subarray_ymin + min(256, y_size))             # 0 <= ymin < ymax <= 256
+    x_start = int(random_uniform(256 - x_size))
+    y_start = int(random_uniform(256 - y_size))
+    sub = normal[x_start:(x_start + x_size), y_start:(y_start + y_size), :]
     
-    subwidth = 1 + subarray_xlim[1] - subarray_xlim[0]
-    subheight = 1 + subarray_ylim[1] - subarray_ylim[0]
-    
-    print("subarray:  " + 
-          str(subarray_xlim[0]) + ", " + 
-          str(subarray_xlim[1]) + ", " + 
-          str(subarray_ylim[0]) + ", " + 
-          str(subarray_ylim[1]) + 
-          "     sub size:  " + str(subwidth) + " x " + str(subheight))
- 
-    # Keep only those values from the pixel list that are within the bounds of the subarray
-    sub = [p for p in range(len(normal.pixels)) if 
-           (p % root) >= subarray_xlim[0] and 
-           (p % root) <= subarray_xlim[1] and 
-           (p // root) >= subarray_ylim[0] and 
-           (p // root) <= subarray_ylim[1]]
+    subwidth = sub.shape[0]
+    subheight = sub.shape[1]
     
     # Extract values from the png-encoded terrain data
-    sub_len_range = range(len(sub))
-    elevations_to_reds = [(normal.pixels[sub[i]] >> 24) & 0xFF for i in sub_len_range]
-    normal_red = [((normal.pixels[sub[i]] >> 16) & 0xFF) - 128 for i in sub_len_range]
-    normal_green = [((normal.pixels[sub[i]] >> 8) & 0xFF) - 128 for i in sub_len_range]
-    normal_blue = [(normal.pixels[sub[i]] & 0xFF) - 128 for i in sub_len_range]
+    elevations_to_reds = sub[:,:,3]
+    normal_red = sub[:,:,0] - 128
+    normal_green = sub[:,:,1] - 128
+    # normal_blue = sub[:,:,2]
     
     # Calculate colours
-    elevations_to_reds = [map(alpha, min(elevations_to_reds), max(elevations_to_reds), 0, 255) for alpha in elevations_to_reds]   # Stretch up the reds
-    sub_random_green = random(0, 255)
-    sub_random_blue = random(0, 255)
+    elevations_to_reds = (elevations_to_reds - np.min(elevations_to_reds)) * \
+                         (255 / (np.max(elevations_to_reds) - np.min(elevations_to_reds) + 1))   # Stretch up the reds
+    elevations_to_reds = elevations_to_reds.astype('int')
+    sub_random_green = int(random_uniform(0, 255))
+    sub_random_blue = int(random_uniform(0, 255))
     
     sub_lineweight = 500 / (subwidth + subheight)
-    sub_alpha = 50                                      # TODO: animate this
+    sub_alpha = 50                                      # TODO: animate these properties
     
     # Get fixed coordinates
-    Xs = [sub[i] % root for i in sub_len_range]
-    Ys = [sub[i] // root for i in sub_len_range]
+    Xs, Ys = np.meshgrid(np.arange(subheight), np.arange(subwidth))
     if not swap_rg:
-        Xs_dest = [Xs[i] + 0.0390625 * normal_red[i] * (output_width / subwidth) for i in sub_len_range] 
-        Ys_dest = [Ys[i] + 0.0390625 * normal_green[i] * (output_height / subheight) for i in sub_len_range]
+        Xs_dest = Xs + 0.00390625 * normal_red
+        Ys_dest = Ys + 0.00390625 * normal_green
     else:
-        Xs_dest = [Xs[i] + 0.0390625 * normal_green[i] * (output_width / subwidth) for i in sub_len_range] 
-        Ys_dest = [Ys[i] + 0.0390625 * normal_red[i] * (output_height / subheight) for i in sub_len_range]       
+        Xs_dest = Xs + 0.00390625 * normal_green
+        Ys_dest = Ys + 0.00390625 * normal_red
 
     # Collect all the artistic properties in a dict
     sub_design = {"elevations_to_reds": elevations_to_reds, 
@@ -136,53 +148,63 @@ def restart_drawing():
 
 
 def draw_single_line(red, green, blue, alpha, weight, from_x, from_y, to_x, to_y):
-    stroke(red, green, blue, alpha)
-    strokeWeight(weight)
-    line(from_x, from_y, to_x, to_y)
+    red = int(red)
+    stroke(r = red, g = green, b = blue, a = alpha)
+    stroke_weight(weight)
+    # print("from: " + str((from_x, from_y)) + "\n  to: " + str((to_x, to_y)))
+    line((from_x, from_y), (to_x, to_y))
 
 
 def calculate_frame_coords(sub, design, j):
     # Get the fraction
-    update_fraction = min(1, map(mouseX, 0, output_width * 0.9, 0, 1))
-    sub_length = len(sub)
+    update_fraction = min(1, remap(mouse_x, (0, output_width * 0.9), (0, 1)))
+    # sub_length = len(sub)
     if update_fraction == 1:
-        sub_fraction_length = sub_length
-        fractioned_sub = range(sub_length)
+        # sub_fraction_length = sub_length
+        fractioned_sub = sub
     else:
-        sub_fraction_length = int(update_fraction * sub_length)
-        fractioned_sub = [int(random(a)) for a in [sub_length] * sub_fraction_length]
+        # sub_fraction_length = int(update_fraction * sub_length)
+        # fractioned_sub = [int(random_uniform(a)) for a in [sub_length] * sub_fraction_length]
+        fractioned_sub = sub  # TODO: repair this with numpy
     
     # Calculate jitter
-    noiseSeed(4)
-    noiseDetail(1)
-    Xs_jitter =  [jitter_start_range * (noise(jitter_start_speed * (j + i)) - 0.5) for i in fractioned_sub]
-    noiseSeed(5)
-    Ys_jitter = [jitter_start_range * (noise(jitter_start_speed * (j + i)) - 0.5) for i in fractioned_sub]
-    noiseSeed(6)
-    Xs_dest_jitter = [jitter_end_range * (noise(jitter_end_speed * (j + i)) - 0.5) for i in fractioned_sub]    # TODO: add vector magnitude somehow
-    noiseSeed(7)
-    Ys_dest_jitter = [jitter_end_range * (noise(jitter_end_speed * (j + i)) - 0.5) for i in fractioned_sub]
+    # noise_seed(4)
+    # noise_detail(1)
+    # Xs_jitter =  [jitter_start_range * (noise(jitter_start_speed * (j + i)) - 0.5) for i in fractioned_sub]
+    #
+    # noise_seed(5)
+    # Ys_jitter = [jitter_start_range * (noise(jitter_start_speed * (j + i)) - 0.5) for i in fractioned_sub]
+    # noise_seed(6)
+    # Xs_dest_jitter = [jitter_end_range * (noise(jitter_end_speed * (j + i)) - 0.5) for i in fractioned_sub]
+    # noise_seed(7)
+    # Ys_dest_jitter = [jitter_end_range * (noise(jitter_end_speed * (j + i)) - 0.5) for i in fractioned_sub]
+    # np.random.seed(8)
+    subwidth = sub.shape[0]
+    subheight = sub.shape[1]
+    jitter = 0  # generate_perlin_noise_2d((subwidth, subheight), (1, 1))     # TODO: fix this   # TODO: incorporate j and waviness in this
+    np.random.seed(9)
+    jitter_dest = 0  # generate_perlin_noise_2d((subwidth, subheight), (1, 1))     # TODO: add vector magnitude somehow
     
     # Add noise to absolute coordinates
-    Xs_jittered = [design['Xs'][e[1]] + Xs_jitter[e[0]] for e in enumerate(fractioned_sub)]       # e[1] == i    e[0] : range of length of fractioned_sub
-    Ys_jittered = [design['Ys'][e[1]] + Ys_jitter[e[0]] for e in enumerate(fractioned_sub)]
-    Xs_dest_jittered = [design['Xs_dest'][e[1]] + Xs_dest_jitter[e[0]] for e in enumerate(fractioned_sub)]
-    Ys_dest_jittered = [design['Ys_dest'][e[1]] + Ys_dest_jitter[e[0]] for e in enumerate(fractioned_sub)]
+    Xs_jittered = design['Xs'] + jitter
+    Ys_jittered = design['Ys'] + jitter
+    Xs_dest_jittered = design['Xs_dest'] + jitter_dest
+    Ys_dest_jittered = design['Ys_dest'] + jitter_dest
     
     # Get absolute window
-    abs_window = (min(design['Xs']),       # left
-                  max(design['Xs']),       # right
-                  min(design['Ys']),       # top
-                  max(design['Ys']))       # bottom
+    abs_window = (np.min(design['Xs']),       # left
+                  np.max(design['Xs']),       # right
+                  np.min(design['Ys']),       # top
+                  np.max(design['Ys']))       # bottom
     
     # Stretch noisy coordinates out to fill the relative window
-    Xs_zoomed = [map(Xs_jittered[h], abs_window[0], abs_window[1], rel_window[0], rel_window[1]) for h in range(sub_fraction_length)]     # h == e[0]
-    Ys_zoomed = [map(Ys_jittered[h], abs_window[2], abs_window[3], rel_window[2], rel_window[3]) for h in range(sub_fraction_length)]
-    Xs_zoomed_dest = [map(Xs_dest_jittered[h], abs_window[0], abs_window[1], rel_window[0], rel_window[1]) for h in range(sub_fraction_length)]
-    Ys_zoomed_dest = [map(Ys_dest_jittered[h], abs_window[2], abs_window[3], rel_window[2], rel_window[3]) for h in range(sub_fraction_length)]
-    
+    Xs_zoomed = (Xs_jittered - abs_window[0]) * (rel_window[1] / (abs_window[1] - abs_window[0]))
+    Ys_zoomed = (Ys_jittered - abs_window[2]) * (rel_window[3] / (abs_window[3] - abs_window[2]))
+    Xs_zoomed_dest = (Xs_dest_jittered - abs_window[0]) * (rel_window[1] / (abs_window[1] - abs_window[0]))
+    Ys_zoomed_dest = (Ys_dest_jittered - abs_window[2]) * (rel_window[3] / (abs_window[3] - abs_window[2])) + 1      # TODO: A line from a coordinate to the exact same coordinate causes a crash; adding 1 pixel to y2 prevents this most of the time but it could still go wrong
+
     # Collect all the coordinates in a dict
-    frame = {"is": fractioned_sub,
+    frame = {"fsub": fractioned_sub,
              "Xs_zoomed": Xs_zoomed,
              "Ys_zoomed": Ys_zoomed,
              "Xs_zoomed_dest": Xs_zoomed_dest,
@@ -192,24 +214,28 @@ def calculate_frame_coords(sub, design, j):
 
 def draw_all_lines(sub, design, j): 
     # Draw an almost black rectangle over the existing lines
-    keep = map(log(mouseY), 0, log(output_height), 0, 255)
-    fill(0, 0, 0, 255 - keep)
-    rect(-50, -50, output_width + 200, output_height + 200)
-    
+    keep = remap(mouse_y, (0, output_height), (0, 255))
+    backgroundcol = Color(0, 0, 0, 255 - keep)
+    fill(backgroundcol)
+    rect((-50, -50), output_width + 200, output_height + 200)
+
     # Get the coordinates for this frame
     frame = calculate_frame_coords(sub, design, j)
-    
+
     # Draw the lines
-    [draw_single_line(red = design["elevations_to_reds"][e[1]],     # Use the elevation data for red, 
-                      green = design["sub_random_green"],           #   random values (per drawing) for green
-                      blue = design["sub_random_blue"],             #   and blue
-                      alpha = design["sub_alpha"],
-                      weight = design["sub_lineweight"],
-                      from_x = frame["Xs_zoomed"][e[0]],
-                      from_y = frame["Ys_zoomed"][e[0]],
-                      to_x = frame["Xs_zoomed_dest"][e[0]],
-                      to_y = frame["Ys_zoomed_dest"][e[0]]) for e in enumerate(frame["is"])]
-    
+    f_height, f_width, f_depth = np.shape(frame['fsub'])
+    for v in range(f_height):
+        for h in range(f_width):
+            draw_single_line(red=design['elevations_to_reds'][v, h],
+                             green=design['sub_random_green'],
+                             blue=design['sub_random_blue'],
+                             alpha=design['sub_alpha'],
+                             weight=design['sub_lineweight'],
+                             from_x=frame['Xs_zoomed'][v, h],
+                             from_y=frame['Ys_zoomed'][v, h],
+                             to_x=frame['Xs_zoomed_dest'][v, h],
+                             to_y=frame['Ys_zoomed_dest'][v, h])    # TODO: find a smarter/faster way than double for-loop
+
 
 def mousePressed():
     global j
@@ -226,3 +252,7 @@ def draw():
         design, sub = restart_drawing()
     draw_all_lines(sub, design, j)
     j += 1
+
+
+if __name__ == "__main__":
+    run()
