@@ -8,13 +8,10 @@ output_height = 800
 # source_img_path = "7-65-42.png"    # Netherlands
 source_img_path = "6-19-43.png"      # Tierra del Fuego
 line_per_frame = False
-jitter_start_range = random_uniform(2)
-jitter_start_speed = random_uniform(0.05)
-jitter_end_range = random_uniform(2)
-jitter_end_speed = random_uniform(0.05)
+jitteriness = 0.1
 swap_rg = False
 # keep = 240                            #  0 <= x <= 255
-sub_size_range = (100, 101)           #  2 <= a < b <= 254
+sub_size_range = (5, 50)           #  2 <= a < b <= 254
 # update_fraction = 0.99                # TODO: implement fraction/keep trade-off to set itself automatically
 
 # Globals
@@ -41,55 +38,49 @@ def setup():
     j = 0
 
 
-def generate_perlin_noise_2d(shape, res):    # From https://github.com/pvigier/perlin-numpy (it's not a pkg yet)
-    def f(t):
-        return 6 * t ** 5 - 15 * t ** 4 + 10 * t ** 3
-
-    delta = (res[0] / shape[0], res[1] / shape[1])
-    d = (shape[0] // res[0], shape[1] // res[1])
-    grid = np.mgrid[0:res[0]:delta[0], 0:res[1]:delta[1]].transpose(1, 2, 0) % 1
-    # Gradients
-    angles = 2 * np.pi * np.random.rand(res[0] + 1, res[1] + 1)
-    gradients = np.dstack((np.cos(angles), np.sin(angles)))
-    g00 = gradients[0:-1, 0:-1].repeat(d[0], 0).repeat(d[1], 1)
-    g10 = gradients[1:, 0:-1].repeat(d[0], 0).repeat(d[1], 1)
-    g01 = gradients[0:-1, 1:].repeat(d[0], 0).repeat(d[1], 1)
-    g11 = gradients[1:, 1:].repeat(d[0], 0).repeat(d[1], 1)
-    # Ramps
-    n00 = np.sum(np.dstack((grid[:, :, 0], grid[:, :, 1])) * g00, 2)
-    n10 = np.sum(np.dstack((grid[:, :, 0] - 1, grid[:, :, 1])) * g10, 2)
-    n01 = np.sum(np.dstack((grid[:, :, 0], grid[:, :, 1] - 1)) * g01, 2)
-    n11 = np.sum(np.dstack((grid[:, :, 0] - 1, grid[:, :, 1] - 1)) * g11, 2)
-    # Interpolation
-    t = f(grid)
-    n0 = n00 * (1 - t[:, :, 0]) + t[:, :, 0] * n10
-    n1 = n01 * (1 - t[:, :, 0]) + t[:, :, 0] * n11
-    return np.sqrt(2) * ((1 - t[:, :, 1]) * n0 + t[:, :, 1] * n1)
+# def generate_perlin_noise_2d(shape, res, k):    # Adapted rom https://github.com/pvigier/perlin-numpy
+#     def f(t):
+#         return 6 * t ** 5 - 15 * t ** 4 + 10 * t ** 3
+#
+#     delta = (res[0] / shape[0], res[1] / shape[1])
+#     d = (shape[0] // res[0], shape[1] // res[1])
+#     grid = np.mgrid[0:res[0]:delta[0], 0:res[1]:delta[1]].transpose(1, 2, 0) + k
+#     grid %= 1
+#     # print(str(grid))
+#     # Gradients
+#     angles = 2 * np.pi * np.random.rand(res[0] + 1, res[1] + 1)
+#     gradients = np.dstack((np.cos(angles), np.sin(angles)))
+#     g00 = gradients[0:-1, 0:-1].repeat(d[0], 0).repeat(d[1], 1)
+#     g10 = gradients[1:, 0:-1].repeat(d[0], 0).repeat(d[1], 1)
+#     g01 = gradients[0:-1, 1:].repeat(d[0], 0).repeat(d[1], 1)
+#     g11 = gradients[1:, 1:].repeat(d[0], 0).repeat(d[1], 1)
+#     # Ramps
+#     n00 = np.sum(np.dstack((grid[:, :, 0], grid[:, :, 1])) * g00, 2)
+#     n10 = np.sum(np.dstack((grid[:, :, 0] - 1, grid[:, :, 1])) * g10, 2)
+#     n01 = np.sum(np.dstack((grid[:, :, 0], grid[:, :, 1] - 1)) * g01, 2)
+#     n11 = np.sum(np.dstack((grid[:, :, 0] - 1, grid[:, :, 1] - 1)) * g11, 2)
+#     # Interpolation
+#     t = f(grid)
+#     n0 = n00 * (1 - t[:, :, 0]) + t[:, :, 0] * n10
+#     n1 = n01 * (1 - t[:, :, 0]) + t[:, :, 0] * n11
+#     result = np.sqrt(2) * ((1 - t[:, :, 1]) * n0 + t[:, :, 1] * n1)
+#     return result
 
 
 def get_random_settings_within_ranges():
     global sub_size_range
     global x_size
     global swap_rg
-    global jitter_start_range
-    global jitter_start_speed
-    global jitter_end_range
-    global jitter_end_speed
+    global jitteriness
     
     x_size = int(random_uniform(sub_size_range[0], sub_size_range[1]))
     swap_rg = (False, True)[int(round(random_uniform(1.01)))]   # PRCQJPX
-    jitter_start_range = random_uniform(2)
-    jitter_start_speed = random_uniform(0.05)
-    jitter_end_range = random_uniform(2)
-    jitter_end_speed = random_uniform(0.05)
+    jitteriness = random_uniform(high=jitteriness+1,
+                                 low=max(0, jitteriness-1))
     
     print("x_size:  " + str(x_size))
     print("swap_rg:  " + str(swap_rg))
-    print("jitter:  s: " + 
-          str(round(jitter_start_range, 1)) + "___" + 
-          str(round(jitter_start_speed, 2)) + "   & e: " + 
-          str(round(jitter_end_range, 1)) + "___" + 
-          str(round(jitter_end_speed, 2)))
+    print("jitter:  s: " + str(round(jitteriness, 1)))
 
 
 def restart_drawing():
@@ -156,6 +147,7 @@ def draw_single_line(red, green, blue, alpha, weight, from_x, from_y, to_x, to_y
 
 
 def calculate_frame_coords(sub, design, j):
+    global jitteriness
     # Get the fraction
     update_fraction = min(1, remap(mouse_x, (0, output_width * 0.9), (0, 1)))
     # sub_length = len(sub)
@@ -168,28 +160,30 @@ def calculate_frame_coords(sub, design, j):
         fractioned_sub = sub  # TODO: repair this with numpy
     
     # Calculate jitter
-    # noise_seed(4)
-    # noise_detail(1)
-    # Xs_jitter =  [jitter_start_range * (noise(jitter_start_speed * (j + i)) - 0.5) for i in fractioned_sub]
-    #
-    # noise_seed(5)
-    # Ys_jitter = [jitter_start_range * (noise(jitter_start_speed * (j + i)) - 0.5) for i in fractioned_sub]
-    # noise_seed(6)
-    # Xs_dest_jitter = [jitter_end_range * (noise(jitter_end_speed * (j + i)) - 0.5) for i in fractioned_sub]
-    # noise_seed(7)
-    # Ys_dest_jitter = [jitter_end_range * (noise(jitter_end_speed * (j + i)) - 0.5) for i in fractioned_sub]
-    # np.random.seed(8)
-    subwidth = sub.shape[0]
-    subheight = sub.shape[1]
-    jitter = 0  # generate_perlin_noise_2d((subwidth, subheight), (1, 1))     # TODO: fix this   # TODO: incorporate j and waviness in this
-    np.random.seed(9)
-    jitter_dest = 0  # generate_perlin_noise_2d((subwidth, subheight), (1, 1))     # TODO: add vector magnitude somehow
+    # subwidth = sub.shape[0]
+    # subheight = sub.shape[1]
+    # np.random.seed(27)
+    # X_jitter = generate_perlin_noise_2d((subwidth, subheight), (1, 1), k=0.005*j) - .5
+    noise_seed(27)
+    X_jitter = np.array([jitteriness * (noise(0.05 * (j + n)) - 0.5) for n in design['Xs'].flat]).reshape(design['Xs'].shape)
+    # np.random.seed(28)
+    # Y_jitter = generate_perlin_noise_2d((subwidth, subheight), (1, 1), k=0.005*j) - .5
+    noise_seed(28)
+    Y_jitter = np.array([jitteriness * (noise(0.05 * (j + n)) - 0.5) for n in design['Ys'].flat]).reshape(design['Xs'].shape)
+    # np.random.seed(29)
+    # X_jitter_dest = generate_perlin_noise_2d((subwidth, subheight), (1, 1), k=0.005*j) - .5    # TODO: add vector magnitude somehow
+    noise_seed(29)
+    X_jitter_dest = np.array([jitteriness * (noise(0.05 * (j + n)) - 0.5) for n in design['Xs_dest'].flat]).reshape(design['Xs'].shape)
+    # np.random.seed(30)
+    # Y_jitter_dest = generate_perlin_noise_2d((subwidth, subheight), (1, 1), k=0.005*j) - .5
+    noise_seed(30)
+    Y_jitter_dest = np.array([jitteriness * (noise(0.05 * (j + n)) - 0.5) for n in design['Ys_dest'].flat]).reshape(design['Xs'].shape)
     
     # Add noise to absolute coordinates
-    Xs_jittered = design['Xs'] + jitter
-    Ys_jittered = design['Ys'] + jitter
-    Xs_dest_jittered = design['Xs_dest'] + jitter_dest
-    Ys_dest_jittered = design['Ys_dest'] + jitter_dest
+    Xs_jittered = design['Xs'] + X_jitter
+    Ys_jittered = design['Ys'] + Y_jitter
+    Xs_dest_jittered = design['Xs_dest'] + X_jitter_dest
+    Ys_dest_jittered = design['Ys_dest'] + Y_jitter_dest
     
     # Get absolute window
     abs_window = (np.min(design['Xs']),       # left
@@ -237,7 +231,7 @@ def draw_all_lines(sub, design, j):
                              to_y=frame['Ys_zoomed_dest'][v, h])    # TODO: find a smarter/faster way than double for-loop
 
 
-def mousePressed():
+def mouse_pressed():
     global j
     get_random_settings_within_ranges()
     j = 0
