@@ -14,7 +14,7 @@ line_per_frame = False
 jitteriness = 0.1
 swap_rg = False
 # keep = 240                            #  0 <= x <= 255
-sub_size_range = (10, 31)           #  2 <= a < b <= 254
+sub_size_range = (30, 31)           #  2 <= a < b <= 254
 # update_fraction = 0.99                # TODO: implement fraction/keep trade-off to set itself automatically
 
 # Globals
@@ -82,13 +82,13 @@ def get_random_settings_within_ranges():
     global jitteriness
     
     x_size = int(rng.integers(sub_size_range[0], sub_size_range[1]))
-    # swap_rg = (False, True)[int(round(random_uniform(1.01)))]   # PRCQJPX    # TODO: remove or improve this
-    jitteriness = random_uniform(high=jitteriness+1,
-                                 low=max(0, jitteriness-1))
+    swap_rg = bool(rng.binomial(1, .5))
+    jitteriness = rng.uniform(low=max(0, jitteriness-1),
+                              high=jitteriness+1)
 
     print("x_size:  " + str(x_size))
     # print("swap_rg:  " + str(swap_rg))
-    # print("jitter:  s: " + str(round(jitteriness, 1)))
+    print("jitter:  s: " + str(round(jitteriness, 1)))
 
 
 def restart_drawing():
@@ -105,10 +105,10 @@ def restart_drawing():
     y_start = int(rng.integers(256 - y_size))
     sub = normal[x_start:(x_start + x_size), y_start:(y_start + y_size), :]
 
-    print("x_start:   " + str(x_start) +
-          "\nx end:     " + str(x_start + x_size) +
-          "\ny_start:   " + str(y_start) +
-          "\ny_end:     " + str(y_start + y_size))
+    # print("x_start:   " + str(x_start) +
+    #       "\nx end:     " + str(x_start + x_size) +
+    #       "\ny_start:   " + str(y_start) +
+    #       "\ny_end:     " + str(y_start + y_size))
     
     subwidth = sub.shape[0]
     subheight = sub.shape[1]
@@ -257,11 +257,14 @@ def draw():
     global j
     global sub
     global design
-    
-    # if j == 0:
-    #     design, sub = restart_drawing()
+
     draw_all_lines(sub, design, j)
     j += 1
+
+    fill(Color(255, 255, 255, 200))
+    text(str(round(frame_rate)) + " fps",
+         (10, 10))
+
     # print(str(j))
     if j == 100:
         quit()
