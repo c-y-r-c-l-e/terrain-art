@@ -2,6 +2,9 @@ from p5 import *
 import numpy as np
 from PIL import Image
 
+import cProfile
+
+
 # User settings
 output_width = 1280
 output_height = 800
@@ -11,7 +14,7 @@ line_per_frame = False
 jitteriness = 0.1
 swap_rg = False
 # keep = 240                            #  0 <= x <= 255
-sub_size_range = (5, 50)           #  2 <= a < b <= 254
+sub_size_range = (10, 31)           #  2 <= a < b <= 254
 # update_fraction = 0.99                # TODO: implement fraction/keep trade-off to set itself automatically
 
 # Globals
@@ -20,6 +23,7 @@ rel_window = (0.01 * output_width,       #  (left, right, top, bottom)
               0.01 * output_height, 
               0.99 * output_height)
 x_size = int(random_uniform(sub_size_range[0], sub_size_range[1]))
+rng = np.random.default_rng()
 
 
 def initialise_img(path):
@@ -31,11 +35,15 @@ def initialise_img(path):
 def setup():
     global normal
     global j
+    global design
+    global sub
     size(output_width, output_height)
     color_mode("RGB")
     background(0)
     normal = initialise_img(source_img_path)
+    design, sub = restart_drawing()
     j = 0
+    print("NOTE: quitting on j == 100")
 
 
 # def generate_perlin_noise_2d(shape, res, k):    # Adapted rom https://github.com/pvigier/perlin-numpy
@@ -73,14 +81,14 @@ def get_random_settings_within_ranges():
     global swap_rg
     global jitteriness
     
-    x_size = int(random_uniform(sub_size_range[0], sub_size_range[1]))
-    swap_rg = (False, True)[int(round(random_uniform(1.01)))]   # PRCQJPX
+    x_size = int(rng.integers(sub_size_range[0], sub_size_range[1]))
+    # swap_rg = (False, True)[int(round(random_uniform(1.01)))]   # PRCQJPX    # TODO: remove or improve this
     jitteriness = random_uniform(high=jitteriness+1,
                                  low=max(0, jitteriness-1))
-    
+
     print("x_size:  " + str(x_size))
-    print("swap_rg:  " + str(swap_rg))
-    print("jitter:  s: " + str(round(jitteriness, 1)))
+    # print("swap_rg:  " + str(swap_rg))
+    # print("jitter:  s: " + str(round(jitteriness, 1)))
 
 
 def restart_drawing():
@@ -93,9 +101,14 @@ def restart_drawing():
     
     # Select a new random subarray
     y_size = int(0.703125 * x_size)
-    x_start = int(random_uniform(256 - x_size))
-    y_start = int(random_uniform(256 - y_size))
+    x_start = int(rng.integers(256 - x_size))
+    y_start = int(rng.integers(256 - y_size))
     sub = normal[x_start:(x_start + x_size), y_start:(y_start + y_size), :]
+
+    print("x_start:   " + str(x_start) +
+          "\nx end:     " + str(x_start + x_size) +
+          "\ny_start:   " + str(y_start) +
+          "\ny_end:     " + str(y_start + y_size))
     
     subwidth = sub.shape[0]
     subheight = sub.shape[1]
@@ -110,8 +123,8 @@ def restart_drawing():
     elevations_to_reds = (elevations_to_reds - np.min(elevations_to_reds)) * \
                          (255 / (np.max(elevations_to_reds) - np.min(elevations_to_reds) + 1))   # Stretch up the reds
     elevations_to_reds = elevations_to_reds.astype('int')
-    sub_random_green = int(random_uniform(0, 255))
-    sub_random_blue = int(random_uniform(0, 255))
+    sub_random_green = int(rng.integers(0, 255))
+    sub_random_blue = int(rng.integers(0, 255))
     
     sub_lineweight = 500 / (subwidth + subheight)
     sub_alpha = 50                                      # TODO: animate these properties
@@ -156,7 +169,7 @@ def calculate_frame_coords(sub, design, j):
         fractioned_sub = sub
     else:
         # sub_fraction_length = int(update_fraction * sub_length)
-        # fractioned_sub = [int(random_uniform(a)) for a in [sub_length] * sub_fraction_length]
+        # fractioned_sub = [int(rng.integers(a)) for a in [sub_length] * sub_fraction_length]
         fractioned_sub = sub  # TODO: repair this with numpy
     
     # Calculate jitter
@@ -217,23 +230,26 @@ def draw_all_lines(sub, design, j):
     frame = calculate_frame_coords(sub, design, j)
 
     # Draw the lines
-    f_height, f_width, f_depth = np.shape(frame['fsub'])
-    for v in range(f_height):
-        for h in range(f_width):
-            draw_single_line(red=design['elevations_to_reds'][v, h],
-                             green=design['sub_random_green'],
-                             blue=design['sub_random_blue'],
-                             alpha=design['sub_alpha'],
-                             weight=design['sub_lineweight'],
-                             from_x=frame['Xs_zoomed'][v, h],
-                             from_y=frame['Ys_zoomed'][v, h],
-                             to_x=frame['Xs_zoomed_dest'][v, h],
-                             to_y=frame['Ys_zoomed_dest'][v, h])    # TODO: find a smarter/faster way than double for-loop
+    f_height, f_width, _ = np.shape(frame['fsub'])
+    [[draw_single_line(red=design['elevations_to_reds'][v, h],
+                       green=design['sub_random_green'],
+                       blue=design['sub_random_blue'],
+                       alpha=design['sub_alpha'],
+                       weight=design['sub_lineweight'],
+                       from_x=frame['Xs_zoomed'][v, h],
+                       from_y=frame['Ys_zoomed'][v, h],
+                       to_x=frame['Xs_zoomed_dest'][v, h],
+                       to_y=frame['Ys_zoomed_dest'][v, h])
+      for h in range(f_width)]
+     for v in range(f_height)]    # TODO: find a smarter/faster way than double list comp
 
 
 def mouse_pressed():
     global j
+    global sub
+    global design
     get_random_settings_within_ranges()
+    design, sub = restart_drawing()
     j = 0
     
 
@@ -242,11 +258,15 @@ def draw():
     global sub
     global design
     
-    if j == 0:
-        design, sub = restart_drawing()
+    # if j == 0:
+    #     design, sub = restart_drawing()
     draw_all_lines(sub, design, j)
     j += 1
+    # print(str(j))
+    if j == 100:
+        quit()
 
 
 if __name__ == "__main__":
+    # cProfile.run('run()', sort='time')
     run()
