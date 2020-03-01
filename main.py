@@ -46,35 +46,6 @@ def setup():
     print("NOTE: quitting on j == 100")
 
 
-# def generate_perlin_noise_2d(shape, res, k):    # Adapted rom https://github.com/pvigier/perlin-numpy
-#     def f(t):
-#         return 6 * t ** 5 - 15 * t ** 4 + 10 * t ** 3
-#
-#     delta = (res[0] / shape[0], res[1] / shape[1])
-#     d = (shape[0] // res[0], shape[1] // res[1])
-#     grid = np.mgrid[0:res[0]:delta[0], 0:res[1]:delta[1]].transpose(1, 2, 0) + k
-#     grid %= 1
-#     # print(str(grid))
-#     # Gradients
-#     angles = 2 * np.pi * np.random.rand(res[0] + 1, res[1] + 1)
-#     gradients = np.dstack((np.cos(angles), np.sin(angles)))
-#     g00 = gradients[0:-1, 0:-1].repeat(d[0], 0).repeat(d[1], 1)
-#     g10 = gradients[1:, 0:-1].repeat(d[0], 0).repeat(d[1], 1)
-#     g01 = gradients[0:-1, 1:].repeat(d[0], 0).repeat(d[1], 1)
-#     g11 = gradients[1:, 1:].repeat(d[0], 0).repeat(d[1], 1)
-#     # Ramps
-#     n00 = np.sum(np.dstack((grid[:, :, 0], grid[:, :, 1])) * g00, 2)
-#     n10 = np.sum(np.dstack((grid[:, :, 0] - 1, grid[:, :, 1])) * g10, 2)
-#     n01 = np.sum(np.dstack((grid[:, :, 0], grid[:, :, 1] - 1)) * g01, 2)
-#     n11 = np.sum(np.dstack((grid[:, :, 0] - 1, grid[:, :, 1] - 1)) * g11, 2)
-#     # Interpolation
-#     t = f(grid)
-#     n0 = n00 * (1 - t[:, :, 0]) + t[:, :, 0] * n10
-#     n1 = n01 * (1 - t[:, :, 0]) + t[:, :, 0] * n11
-#     result = np.sqrt(2) * ((1 - t[:, :, 1]) * n0 + t[:, :, 1] * n1)
-#     return result
-
-
 def get_random_settings_within_ranges():
     global sub_size_range
     global x_size
@@ -161,34 +132,16 @@ def draw_single_line(red, green, blue, alpha, weight, from_x, from_y, to_x, to_y
 
 def calculate_frame_coords(sub, design, j):
     global jitteriness
-    # Get the fraction
-    update_fraction = min(1, remap(mouse_x, (0, output_width * 0.9), (0, 1)))
-    # sub_length = len(sub)
-    if update_fraction == 1:
-        # sub_fraction_length = sub_length
-        fractioned_sub = sub
-    else:
-        # sub_fraction_length = int(update_fraction * sub_length)
-        # fractioned_sub = [int(rng.integers(a)) for a in [sub_length] * sub_fraction_length]
-        fractioned_sub = sub  # TODO: repair this with numpy
-    
+
+    # TODO: only calculate this for the coordinates in fraction
+
     # Calculate jitter
-    # subwidth = sub.shape[0]
-    # subheight = sub.shape[1]
-    # np.random.seed(27)
-    # X_jitter = generate_perlin_noise_2d((subwidth, subheight), (1, 1), k=0.005*j) - .5
     noise_seed(27)
     X_jitter = np.array([jitteriness * (noise(0.05 * (j + n)) - 0.5) for n in design['Xs'].flat]).reshape(design['Xs'].shape)
-    # np.random.seed(28)
-    # Y_jitter = generate_perlin_noise_2d((subwidth, subheight), (1, 1), k=0.005*j) - .5
     noise_seed(28)
     Y_jitter = np.array([jitteriness * (noise(0.05 * (j + n)) - 0.5) for n in design['Ys'].flat]).reshape(design['Xs'].shape)
-    # np.random.seed(29)
-    # X_jitter_dest = generate_perlin_noise_2d((subwidth, subheight), (1, 1), k=0.005*j) - .5    # TODO: add vector magnitude somehow
     noise_seed(29)
     X_jitter_dest = np.array([jitteriness * (noise(0.05 * (j + n)) - 0.5) for n in design['Xs_dest'].flat]).reshape(design['Xs'].shape)
-    # np.random.seed(30)
-    # Y_jitter_dest = generate_perlin_noise_2d((subwidth, subheight), (1, 1), k=0.005*j) - .5
     noise_seed(30)
     Y_jitter_dest = np.array([jitteriness * (noise(0.05 * (j + n)) - 0.5) for n in design['Ys_dest'].flat]).reshape(design['Xs'].shape)
     
@@ -211,7 +164,7 @@ def calculate_frame_coords(sub, design, j):
     Ys_zoomed_dest = (Ys_dest_jittered - abs_window[2]) * (rel_window[3] / (abs_window[3] - abs_window[2])) + 1      # TODO: A line from a coordinate to the exact same coordinate causes a crash; adding 1 pixel to y2 prevents this most of the time but it could still go wrong
 
     # Collect all the coordinates in a dict
-    frame = {"fsub": fractioned_sub,
+    frame = {"fsub": sub,
              "Xs_zoomed": Xs_zoomed,
              "Ys_zoomed": Ys_zoomed,
              "Xs_zoomed_dest": Xs_zoomed_dest,
@@ -219,7 +172,7 @@ def calculate_frame_coords(sub, design, j):
     return frame
 
 
-def draw_all_lines(sub, design, j): 
+def draw_all_lines(sub, design, j):
     # Draw an almost black rectangle over the existing lines
     keep = remap(mouse_y, (0, output_height), (0, 255))
     backgroundcol = Color(0, 0, 0, 255 - keep)
@@ -228,20 +181,24 @@ def draw_all_lines(sub, design, j):
 
     # Get the coordinates for this frame
     frame = calculate_frame_coords(sub, design, j)
+    f_height, f_width, _ = np.shape(frame['fsub'])
+    f_hv = f_height*f_width
+
+    # Get the fraction
+    update_fraction = int(min(1, remap(mouse_x, (0, output_width * 1.1), (0, 1))) * f_hv)
+    fraction = rng.choice(f_hv, size=update_fraction, replace=False)
 
     # Draw the lines
-    f_height, f_width, _ = np.shape(frame['fsub'])
-    [[draw_single_line(red=design['elevations_to_reds'][v, h],
+    [draw_single_line (red=design['elevations_to_reds'][hv // f_width, hv % f_width],
                        green=design['sub_random_green'],
                        blue=design['sub_random_blue'],
                        alpha=design['sub_alpha'],
                        weight=design['sub_lineweight'],
-                       from_x=frame['Xs_zoomed'][v, h],
-                       from_y=frame['Ys_zoomed'][v, h],
-                       to_x=frame['Xs_zoomed_dest'][v, h],
-                       to_y=frame['Ys_zoomed_dest'][v, h])
-      for h in range(f_width)]
-     for v in range(f_height)]    # TODO: find a smarter/faster way than double list comp
+                       from_x=frame['Xs_zoomed'][hv // f_width, hv % f_width],
+                       from_y=frame['Ys_zoomed'][hv // f_width, hv % f_width],
+                       to_x=frame['Xs_zoomed_dest'][hv // f_width, hv % f_width],
+                       to_y=frame['Ys_zoomed_dest'][hv // f_width, hv % f_width])
+     for hv in fraction]
 
 
 def mouse_pressed():
