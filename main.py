@@ -75,11 +75,6 @@ def restart_drawing():
     x_start = int(rng.integers(256 - x_size))
     y_start = int(rng.integers(256 - y_size))
     sub = normal[x_start:(x_start + x_size), y_start:(y_start + y_size), :]
-
-    # print("x_start:   " + str(x_start) +
-    #       "\nx end:     " + str(x_start + x_size) +
-    #       "\ny_start:   " + str(y_start) +
-    #       "\ny_end:     " + str(y_start + y_size))
     
     subwidth = sub.shape[0]
     subheight = sub.shape[1]
@@ -126,32 +121,35 @@ def draw_single_line(red, green, blue, alpha, weight, from_x, from_y, to_x, to_y
     red = int(red)
     stroke(r = red, g = green, b = blue, a = alpha)
     stroke_weight(weight)
-    # print("from: " + str((from_x, from_y)) + "\n  to: " + str((to_x, to_y)))
     line((from_x, from_y), (to_x, to_y))
 
 
-def calculate_frame_coords(sub, design, j):
+def calculate_frame_coords(sub, design, j, fraction):
     global jitteriness
 
-    # TODO: only calculate this for the coordinates in fraction
+    # Only calculate this for the coordinates in fraction
+    Xs_fraction = design['Xs'].ravel()[fraction]
+    Ys_fraction = design['Ys'].ravel()[fraction]
+    Xs_fraction_dest = design['Xs_dest'].ravel()[fraction]
+    Ys_fraction_dest = design['Ys_dest'].ravel()[fraction]
 
-    # Calculate jitter
+    # Calculate amounts of jitter
     noise_seed(27)
-    X_jitter = np.array([jitteriness * (noise(0.05 * (j + n)) - 0.5) for n in design['Xs'].flat]).reshape(design['Xs'].shape)
+    X_jitter = np.array([jitteriness * (noise(0.05 * (j + n)) - 0.5) for n in Xs_fraction])
     noise_seed(28)
-    Y_jitter = np.array([jitteriness * (noise(0.05 * (j + n)) - 0.5) for n in design['Ys'].flat]).reshape(design['Xs'].shape)
+    Y_jitter = np.array([jitteriness * (noise(0.05 * (j + n)) - 0.5) for n in Ys_fraction])
     noise_seed(29)
-    X_jitter_dest = np.array([jitteriness * (noise(0.05 * (j + n)) - 0.5) for n in design['Xs_dest'].flat]).reshape(design['Xs'].shape)
+    X_jitter_dest = np.array([jitteriness * (noise(0.05 * (j + n)) - 0.5) for n in Xs_fraction_dest])
     noise_seed(30)
-    Y_jitter_dest = np.array([jitteriness * (noise(0.05 * (j + n)) - 0.5) for n in design['Ys_dest'].flat]).reshape(design['Xs'].shape)
+    Y_jitter_dest = np.array([jitteriness * (noise(0.05 * (j + n)) - 0.5) for n in Ys_fraction_dest])
+
+    # Change the absolute coordinates by the amounts of jitter
+    Xs_jittered = Xs_fraction + X_jitter
+    Ys_jittered = Ys_fraction + Y_jitter
+    Xs_dest_jittered = Xs_fraction_dest + X_jitter_dest
+    Ys_dest_jittered = Ys_fraction_dest + Y_jitter_dest
     
-    # Add noise to absolute coordinates
-    Xs_jittered = design['Xs'] + X_jitter
-    Ys_jittered = design['Ys'] + Y_jitter
-    Xs_dest_jittered = design['Xs_dest'] + X_jitter_dest
-    Ys_dest_jittered = design['Ys_dest'] + Y_jitter_dest
-    
-    # Get absolute window
+    # Get absolute window (do not take fraction because the window comprises all the coordinates)
     abs_window = (np.min(design['Xs']),       # left
                   np.max(design['Xs']),       # right
                   np.min(design['Ys']),       # top
@@ -164,8 +162,7 @@ def calculate_frame_coords(sub, design, j):
     Ys_zoomed_dest = (Ys_dest_jittered - abs_window[2]) * (rel_window[3] / (abs_window[3] - abs_window[2])) + 1      # TODO: A line from a coordinate to the exact same coordinate causes a crash; adding 1 pixel to y2 prevents this most of the time but it could still go wrong
 
     # Collect all the coordinates in a dict
-    frame = {"fsub": sub,
-             "Xs_zoomed": Xs_zoomed,
+    frame = {"Xs_zoomed": Xs_zoomed,
              "Ys_zoomed": Ys_zoomed,
              "Xs_zoomed_dest": Xs_zoomed_dest,
              "Ys_zoomed_dest": Ys_zoomed_dest}
@@ -179,26 +176,27 @@ def draw_all_lines(sub, design, j):
     fill(backgroundcol)
     rect((-50, -50), output_width + 200, output_height + 200)
 
-    # Get the coordinates for this frame
-    frame = calculate_frame_coords(sub, design, j)
-    f_height, f_width, _ = np.shape(frame['fsub'])
-    f_hv = f_height*f_width
+    s_height, s_width, _ = np.shape(sub)
+    s_hv = s_height*s_width
 
     # Get the fraction
-    update_fraction = int(min(1, remap(mouse_x, (0, output_width * 1.1), (0, 1))) * f_hv)
-    fraction = rng.choice(f_hv, size=update_fraction, replace=False)
+    update_fraction = max(int(min(1, remap(mouse_x, (0, output_width * 1.1), (0, 1))) * s_hv), 1)
+    fraction = rng.choice(s_hv, size=update_fraction, replace=False)
+
+    # Calculate what to draw
+    frame = calculate_frame_coords(sub, design, j, fraction)
 
     # Draw the lines
-    [draw_single_line (red=design['elevations_to_reds'][hv // f_width, hv % f_width],
+    [draw_single_line (red=design['elevations_to_reds'][fraction[i] // s_width, fraction[i] % s_width],   # this is a 2D-array so the values are retrieved like this: [vertical, horizontal]
                        green=design['sub_random_green'],
                        blue=design['sub_random_blue'],
                        alpha=design['sub_alpha'],
                        weight=design['sub_lineweight'],
-                       from_x=frame['Xs_zoomed'][hv // f_width, hv % f_width],
-                       from_y=frame['Ys_zoomed'][hv // f_width, hv % f_width],
-                       to_x=frame['Xs_zoomed_dest'][hv // f_width, hv % f_width],
-                       to_y=frame['Ys_zoomed_dest'][hv // f_width, hv % f_width])
-     for hv in fraction]
+                       from_x=frame['Xs_zoomed'][i],       # this is a 1D-array of values we can directly work with
+                       from_y=frame['Ys_zoomed'][i],
+                       to_x=frame['Xs_zoomed_dest'][i],
+                       to_y=frame['Ys_zoomed_dest'][i])
+     for i in range(len(fraction))]
 
 
 def mouse_pressed():
