@@ -6,15 +6,15 @@ import cProfile
 
 
 # User settings
-output_width = 1280
-output_height = 800
+output_width = 1920
+output_height = 960
 # source_img_path = "7-65-42.png"    # Netherlands
 source_img_path = "6-19-43.png"      # Tierra del Fuego
 line_per_frame = False
 jitteriness = 0.1
 swap_rg = False
 # keep = 240                            #  0 <= x <= 255
-sub_size_range = (30, 31)           #  2 <= a < b <= 254
+sub_size_range = (10, 101)           #  2 <= a < b <= 254
 # update_fraction = 0.99                # TODO: implement fraction/keep trade-off to set itself automatically
 
 # Globals
@@ -43,19 +43,18 @@ def setup():
     normal = initialise_img(source_img_path)
     design, sub = restart_drawing()
     j = 0
-    print("NOTE: quitting on j == 100")
+    # print("NOTE: quitting on j == 1000")
 
 
-def get_random_settings_within_ranges():
+def get_new_settings():
     global sub_size_range
     global x_size
     global swap_rg
     global jitteriness
-    
-    x_size = int(rng.integers(sub_size_range[0], sub_size_range[1]))
+
+    x_size = int(remap(mouse_x, (0, output_width), sub_size_range))
     swap_rg = bool(rng.binomial(1, .5))
-    jitteriness = rng.uniform(low=max(0, jitteriness-1),
-                              high=jitteriness+1)
+    jitteriness = mouse_y / output_height * 10
 
     print("x_size:  " + str(x_size))
     # print("swap_rg:  " + str(swap_rg))
@@ -93,7 +92,7 @@ def restart_drawing():
     sub_random_blue = int(rng.integers(0, 255))
     
     sub_lineweight = 500 / (subwidth + subheight)
-    sub_alpha = 50                                      # TODO: animate these properties
+    sub_alpha = 196                                      # TODO: animate these properties
     
     # Get fixed coordinates
     Xs, Ys = np.meshgrid(np.arange(subheight), np.arange(subwidth))
@@ -104,6 +103,9 @@ def restart_drawing():
         Xs_dest = Xs + 0.00390625 * normal_green
         Ys_dest = Ys + 0.00390625 * normal_red
 
+    # Choose a fraction style
+    fraction_style = rng.choice(["A", "B", "C"], 1)[0]
+
     # Collect all the artistic properties in a dict
     sub_design = {"elevations_to_reds": elevations_to_reds, 
                   "sub_random_green": sub_random_green, 
@@ -113,7 +115,8 @@ def restart_drawing():
                   "Xs": Xs,
                   "Ys": Ys,
                   "Xs_dest": Xs_dest,
-                  "Ys_dest": Ys_dest}
+                  "Ys_dest": Ys_dest,
+                  "fraction_style": fraction_style}
     return sub_design, sub
 
 
@@ -154,7 +157,7 @@ def calculate_frame_coords(sub, design, j, fraction):
                   np.max(design['Xs']),       # right
                   np.min(design['Ys']),       # top
                   np.max(design['Ys']))       # bottom
-    
+
     # Stretch noisy coordinates out to fill the relative window
     Xs_zoomed = (Xs_jittered - abs_window[0]) * (rel_window[1] / (abs_window[1] - abs_window[0]))
     Ys_zoomed = (Ys_jittered - abs_window[2]) * (rel_window[3] / (abs_window[3] - abs_window[2]))
@@ -181,7 +184,21 @@ def draw_all_lines(sub, design, j):
 
     # Get the fraction
     update_fraction = max(int(min(1, remap(mouse_x, (0, output_width * 1.1), (0, 1))) * s_hv), 1)
-    fraction = rng.choice(s_hv, size=update_fraction, replace=False)
+    if design['fraction_style'] == 'A':
+        fraction = rng.choice(s_hv, size=update_fraction, replace=False)                                # uniform random pick
+    elif design['fraction_style'] == 'B':
+        fraction = rng.triangular(1, rng.choice(s_hv, size=1), s_hv, size=update_fraction).astype(int)  # triangular over the flattened array
+    elif design['fraction_style'] == 'C':
+        centre_x = int(rng.choice(s_width, size=1))
+        centre_y = int(rng.choice(s_height, size=1))
+        blob = rng.multivariate_normal((centre_x, centre_y),
+                                       [[1, 0], [0, 1]],
+                                       size=update_fraction,
+                                       method='cholesky').astype(int)
+        fx = blob[:,1]
+        fy = blob[:,0] * s_width
+        fraction = fx + fy
+        fraction = np.unique(fraction)     # TODO: something here is incorrectly calculated (see animation)
 
     # Calculate what to draw
     frame = calculate_frame_coords(sub, design, j, fraction)
@@ -203,7 +220,7 @@ def mouse_pressed():
     global j
     global sub
     global design
-    get_random_settings_within_ranges()
+    get_new_settings()
     design, sub = restart_drawing()
     j = 0
     
@@ -221,8 +238,8 @@ def draw():
          (10, 10))
 
     # print(str(j))
-    if j == 100:
-        quit()
+    # if j == 1000:
+    #     quit()
 
 
 if __name__ == "__main__":
